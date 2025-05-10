@@ -6,7 +6,6 @@ import csv
 import argparse
 import os
 
-
 def parse_args():
     parser = argparse.ArgumentParser(
         description='Sample joint configurations and detect self-collisions on a Panda robot')
@@ -31,16 +30,16 @@ def parse_args():
 
 def sample_configuration(joint_limits, args):
     """
-    如果未启用 limit_sampling，则进行全关节的均匀随机采样；
-    否则先做全局随机，然后随机选取 args.limit_joints 个关节，
-    在它们的下限或上限附近分别按 args.limit_fraction 进行采样。
+    If limit_sampling is not enabled, perform uniform random sampling across all joints;
+    otherwise, perform a global random sample, then randomly select args.limit_joints joints
+    and sample near their lower or upper limits by args.limit_fraction.
     """
-    # 基础随机采样
+    # Base random sampling for all joints
     q = [np.random.uniform(low, high) for (low, high) in joint_limits]
     if not args.limit_sampling:
         return q
 
-    # 在部分关节附近重采样
+    # Resample near limits for a subset of joints
     num = min(args.limit_joints, len(joint_limits))
     idxs = np.random.choice(len(joint_limits), num, replace=False)
     for j in idxs:
@@ -57,12 +56,12 @@ def sample_configuration(joint_limits, args):
 def main():
     args = parse_args()
 
-    # 连接仿真
+    # Connect to the simulation
     client = p.connect(p.DIRECT)
     p.setAdditionalSearchPath(pybullet_data.getDataPath())
     p.setGravity(0, 0, -9.81)
 
-    # 加载含自碰撞标志的 URDF
+    # Load the URDF with self-collision flags enabled
     flags = p.URDF_USE_SELF_COLLISION | p.URDF_USE_SELF_COLLISION_EXCLUDE_PARENT
     robot = p.loadURDF(
         args.urdf_path,
@@ -70,7 +69,7 @@ def main():
         flags=flags
     )
 
-    # 收集可动关节及限位
+    # Collect movable joints and their limits
     joint_indices = []
     joint_limits = []
     for i in range(p.getNumJoints(robot)):
@@ -83,7 +82,7 @@ def main():
     if not joint_indices:
         raise RuntimeError(f'No movable joints found in URDF at {args.urdf_path}')
 
-    # 生成样本并检测碰撞
+    # Generate samples and detect collisions
     n_samples = args.n_samples
     samples = []
     collision_flags = []
@@ -93,23 +92,23 @@ def main():
         q = sample_configuration(joint_limits, args)
         samples.append(q)
 
-        # 设定关节
+        # Apply joint states
         for jid, angle in zip(joint_indices, q):
             p.resetJointState(robot, jid, angle)
         p.stepSimulation()
 
-        # 碰撞检测
+        # Check for collisions
         contacts = p.getContactPoints(bodyA=robot, bodyB=robot)
         collision = len(contacts) > 0
         if collision:
             N_collision += 1
         collision_flags.append(collision)
 
-        # 定期打印进度
+        # Periodically print progress
         if (idx + 1) % (n_samples // 10) == 0:
             print(f"Sample {idx+1}/{n_samples}: collisions so far = {N_collision}")
 
-    # 写入 CSV
+    # Write results to CSV
     out_file = 'collision_results.csv'
     with open(out_file, 'w', newline='') as f:
         writer = csv.writer(f)

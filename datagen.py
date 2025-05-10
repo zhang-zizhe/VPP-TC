@@ -11,7 +11,10 @@ def main():
     p.setGravity(0, 0, -9.81)
 
     # 加载机器人 URDF（这里以 Panda 为例，可替换为你的 URDF 路径）
-    robot = p.loadURDF("franka_panda/panda.urdf", useFixedBase=True)
+    flags = p.URDF_USE_SELF_COLLISION | p.URDF_USE_SELF_COLLISION_EXCLUDE_PARENT
+    robot = p.loadURDF("panda/panda.urdf",
+                    useFixedBase=True,
+                    flags=flags)
 
     # 获取所有可动关节的索引及限位
     joint_indices = []
@@ -24,9 +27,10 @@ def main():
             joint_limits.append((info[8], info[9]))  # lower, upper
 
     # 采样设置
-    n_samples = 1000
+    n_samples = 100000
     samples = []
     collision_flags = []
+    N_collision = 0
 
     for idx in range(n_samples):
         # 随机生成一组关节角度
@@ -41,10 +45,12 @@ def main():
         # 检测是否有自碰撞
         contacts = p.getContactPoints(bodyA=robot, bodyB=robot)
         collision = len(contacts) > 0
+        if collision:
+            N_collision+=1
         collision_flags.append(collision)
 
-        if idx % 100 == 0:
-            print(f"Sample {idx}: collision = {collision}")
+        if (idx+1) % 10000 == 0:
+            print(f"Sample {idx}: collision = {N_collision}")
 
     # 将结果写入 CSV
     with open("collision_results.csv", "w", newline="") as f:

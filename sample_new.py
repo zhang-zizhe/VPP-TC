@@ -10,19 +10,19 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description='Sample joint configurations and detect self-collisions on a Panda robot')
     parser.add_argument(
-        '--limit-sampling', action='store_true',
+        '--limit_sampling', action='store_true',
         help='Enable near-limit sampling for a subset of joints')
     parser.add_argument(
-        '--limit-fraction', type=float, default=0.05,
+        '--limit_fraction', type=float, default=0.05,
         help='Fraction of joint range to sample near limits')
     parser.add_argument(
-        '--limit-joints', type=int, default=3,
+        '--limit_joints', type=int, default=3,
         help='Number of joints to sample near their limits')
     parser.add_argument(
-        '--n-samples', type=int, default=100000,
+        '--n_samples', type=int, default=100000,
         help='Total number of samples to generate')
     parser.add_argument(
-        '--urdf-path', type=str,
+        '--urdf_path', type=str,
         default=os.path.join(os.path.dirname(__file__), 'panda/panda.urdf'),
         help='Path to the Panda URDF file')
     return parser.parse_args()
@@ -114,7 +114,7 @@ def main():
                 qe_j = q[j] + delta
             qe.append(qe_j)
         end_pos.append(qe)
-        
+
         # 1) Test at the sampled pose q
         for jid, angle in zip(joint_indices, q):
             p.resetJointState(robot, jid, angle)
@@ -140,7 +140,10 @@ def main():
             print(f"Sample {idx+1}/{n_samples}: collisions so far = {N_collision}")
 
     # Write results to CSV
-    out_file = 'collision_results.csv'
+    if args.limit_sampling:
+        out_file = f'collision_results_{args.limit_joints}_limit_sampling.csv'
+    else:
+        out_file = 'collision_results.csv'
     with open(out_file, 'w', newline='') as f:
         writer = csv.writer(f)
         header = [f"joint_{i}_pos" for i in range(len(joint_indices))] + [f"joint_{i}_vel" for i in range(len(joint_indices))]+ [f"joint_{i}_final_pos" for i in range(len(joint_indices))]+ ['collision']

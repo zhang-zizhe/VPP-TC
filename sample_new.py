@@ -28,29 +28,30 @@ def parse_args():
     return parser.parse_args()
 
 
-def sample_configuration(joint_limits, args):
+def sample_configuration(joint_position_limits, joint_velocity_limits, args):
     """
     If limit_sampling is not enabled, perform uniform random sampling across all joints;
     otherwise, perform a global random sample, then randomly select args.limit_joints joints
     and sample near their lower or upper limits by args.limit_fraction.
     """
     # Base random sampling for all joints
-    q = [np.random.uniform(low, high) for (low, high) in joint_limits]
+    q = [np.random.uniform(low, high) for (low, high) in joint_position_limits]
+    qd = [np.random.uniform(low, high) for (low, high) in joint_velocity_limits]
     if not args.limit_sampling:
-        return q
+        return q, qd
 
     # Resample near limits for a subset of joints
-    num = min(args.limit_joints, len(joint_limits))
-    idxs = np.random.choice(len(joint_limits), num, replace=False)
+    num = min(args.limit_joints, len(joint_position_limits))
+    idxs = np.random.choice(len(joint_position_limits), num, replace=False)
     for j in idxs:
-        low, high = joint_limits[j]
+        low, high = joint_position_limits[j]
         span = high - low
         frac = args.limit_fraction
         if np.random.rand() < 0.5:
             q[j] = np.random.uniform(low, low + frac * span)
         else:
             q[j] = np.random.uniform(high - frac * span, high)
-    return q
+    return q, qd
 
 
 def main():
@@ -91,22 +92,45 @@ def main():
 
     # Generate samples and detect collisions
     n_samples = args.n_samples
-    samples = []
+    pos_samples = []
+    vel_samples = []
+    end_pos = []
     collision_flags = []
     N_collision = 0
 
     for idx in range(n_samples):
-        q = sample_configuration(joint_position_limits, args)
-        samples.append(q)
-
-        # Apply joint states
+        q, qd = sample_configuration(joint_position_limits, joint_velocity_limits, args)
+        pos_samples.append(q)
+        vel_samples.append(qd)
+        qe = []
+        for j, vel in enumerate(qd):
+            a_max = joint_acceleration_limits[j][1]
+            if vel == 0:
+                qe_j = q[j]
+            else:
+                t_stop = abs(vel) / a_max
+                # distance under constant deceleration to zero
+                delta = 0.5 * vel * t_stop
+                qe_j = q[j] + delta
+            qe.append(qe_j)
+        end_pos.append(qe)
+        
+        # 1) Test at the sampled pose q
         for jid, angle in zip(joint_indices, q):
             p.resetJointState(robot, jid, angle)
         p.stepSimulation()
+        contacts_q = p.getContactPoints(bodyA=robot, bodyB=robot)
+        collision_q = len(contacts_q) > 0
 
-        # Check for collisions
-        contacts = p.getContactPoints(bodyA=robot, bodyB=robot)
-        collision = len(contacts) > 0
+        # 2) Test at the “stopped” pose qe
+        for jid, angle in zip(joint_indices, qe):
+            p.resetJointState(robot, jid, angle)
+        p.stepSimulation()
+        contacts_qe = p.getContactPoints(bodyA=robot, bodyB=robot)
+        collision_qe = len(contacts_qe) > 0
+
+        # 3) If either pose self‐collides, mark as collision
+        collision = collision_q or collision_qe
         if collision:
             N_collision += 1
         collision_flags.append(collision)
@@ -119,10 +143,10 @@ def main():
     out_file = 'collision_results.csv'
     with open(out_file, 'w', newline='') as f:
         writer = csv.writer(f)
-        header = [f"joint_{i}" for i in range(len(joint_indices))] + ['collision']
+        header = [f"joint_{i}_pos" for i in range(len(joint_indices))] + [f"joint_{i}_vel" for i in range(len(joint_indices))]+ [f"joint_{i}_final_pos" for i in range(len(joint_indices))]+ ['collision']
         writer.writerow(header)
-        for q, flag in zip(samples, collision_flags):
-            writer.writerow(list(q) + [int(flag)])
+        for q, qd, qe, flag in zip(pos_samples, vel_samples, end_pos, collision_flags):
+            writer.writerow(list(q) + list(qd) + list(qe) + [int(flag)])
 
     print(f"Done. Results saved to {out_file}")
     p.disconnect()

@@ -68,17 +68,24 @@ def main():
         useFixedBase=True,
         flags=flags
     )
-
-    # Collect movable joints and their limits
+    # 获取关节索引和关节限制
     joint_indices = []
-    joint_limits = []
+    joint_position_limits = []
+    joint_velocity_limits = []
+    joint_acceleration_limits = [(-15, 15), (-7.5, 7.5), (-10, 10), (-12.5, 12.5), (-15, 15), (-20, 20), (-20, 20)]
+    joint_torque_limits = []
     for i in range(p.getNumJoints(robot)):
         info = p.getJointInfo(robot, i)
         jtype = info[2]
         if jtype in (p.JOINT_REVOLUTE, p.JOINT_PRISMATIC):
             joint_indices.append(i)
-            joint_limits.append((info[8], info[9]))
-
+            joint_position_limits.append((info[8], info[9]))
+            joint_velocity_limits.append((-info[11], info[11]))
+            joint_torque_limits.append((-info[10], info[10]))
+    # print("joint_position_limits", joint_position_limits)
+    # print("joint_velocity_limits", joint_velocity_limits)
+    # print("joint_acceleration_limits", joint_acceleration_limits)
+    # print("joint_torque_limits", joint_torque_limits)
     if not joint_indices:
         raise RuntimeError(f'No movable joints found in URDF at {args.urdf_path}')
 
@@ -89,7 +96,7 @@ def main():
     N_collision = 0
 
     for idx in range(n_samples):
-        q = sample_configuration(joint_limits, args)
+        q = sample_configuration(joint_position_limits, args)
         samples.append(q)
 
         # Apply joint states

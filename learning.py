@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score, recall_score
 
 # ---------- 1. Dataset ----------
-CSV_PATH = Path("collision_results.csv")
+CSV_PATH = Path("collision_results_new.csv")
 LABEL_COL = 21
 
 class CollisionDataset(Dataset):
@@ -25,7 +25,7 @@ class CollisionDataset(Dataset):
 
 # ---------- 2. Model ----------
 class TransformerGamma(nn.Module):
-    def __init__(self, input_dim=14, d_model=64, nhead=2, num_layers=2, dropout=0.1):
+    def __init__(self, input_dim=14, d_model=64, nhead=2, num_layers=4, dropout=0.1):
         super().__init__()
         self.linear_encoder = nn.Linear(1, d_model)
         self.positional_encoding = nn.Parameter(torch.randn(input_dim, d_model))
@@ -103,7 +103,7 @@ def main():
     optimizer = torch.optim.AdamW(model.parameters(), lr=2e-4)
     scaler = torch.cuda.amp.GradScaler()
 
-    loss_log, acc_log, step_log = [], [], []
+    loss_log, acc_log, recall_log, step_log = [], [], [], []
 
     for epoch in range(1, 11):
         model.train()
@@ -124,10 +124,43 @@ def main():
         print(f"[Epoch {epoch}] loss={epoch_loss:.4f}  acc={acc*100:.2f}%  recall={recall*100:.2f}%")
         loss_log.append(epoch_loss)
         acc_log.append(acc * 100)
+        recall_log.append(recall * 100)
         step_log.append(epoch)
 
     torch.save(model.state_dict(), "transformer_gamma.pt")
     print("Model saved to transformer_gamma.pt")
+
+    # ---------- 5. Plotting ----------
+    plt.figure(figsize=(7, 4.5))
+    plt.plot(step_log, loss_log, marker='o', color='crimson', linewidth=2)
+    plt.title("Training Loss per Epoch", fontsize=14)
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.tight_layout()
+    plt.savefig("loss_per_epoch.png")
+    plt.show()
+
+    plt.figure(figsize=(7, 4.5))
+    plt.plot(step_log, acc_log, marker='o', color='green', linewidth=2)
+    plt.title("Test Accuracy per Epoch", fontsize=14)
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy (%)")
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.tight_layout()
+    plt.savefig("accuracy_per_epoch.png")
+    plt.show()
+
+    plt.figure(figsize=(7, 4.5))
+    plt.plot(step_log, recall_log, marker='o', color='blue', linewidth=2)
+    plt.title("Test Recall per Epoch", fontsize=14)
+    plt.xlabel("Epoch")
+    plt.ylabel("Recall (%)")
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.tight_layout()
+    plt.savefig("recall_per_epoch.png")
+    plt.show()
+
 
 
 if __name__ == "__main__":

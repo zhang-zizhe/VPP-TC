@@ -69,6 +69,8 @@ def main():
         useFixedBase=True,
         flags=flags
     )
+    p.setCollisionFilterPair(robot, robot, 4, 6, enableCollision=0)
+
     # 获取关节索引和关节限制
     joint_indices = []
     joint_position_limits = []

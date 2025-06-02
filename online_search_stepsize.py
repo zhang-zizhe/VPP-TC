@@ -103,7 +103,7 @@ if __name__ == "__main__":
     avg_time = total_time / len(q_all)
     print(f"Average time per sample: {avg_time:.4f} s")
 
-    # 列名：q1_min,q1_max,...q7_max
+
     columns = [f"q{i+1}_{s}" for i in range(7) for s in ("min", "max")]
     pd.DataFrame(all_bounds, columns=columns).to_csv("estimated_bounds.csv", index=False)
     print("Results saved to estimated_bounds.csv")

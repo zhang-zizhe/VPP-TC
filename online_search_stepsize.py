@@ -5,9 +5,7 @@ import pandas as pd
 from pathlib import Path
 from learning import TransformerGamma
 
-# ─────────────────────────────────────────────────────────────
-# 0. 设备 & 模型加载（CPU 强制，以免 NCCL 报错）
-# ─────────────────────────────────────────────────────────────
+
 device = torch.device("cpu")
 model = TransformerGamma().to(device)
 model.load_state_dict(torch.load("../../PythonProject3/torque-constraint-learning/transformer_gamma.pt", map_location=device))
@@ -20,12 +18,7 @@ def gamma_model(q_batch, dq_batch):
     _, gamma = model(x)
     return gamma.squeeze()          # shape: [N]
 
-# ─────────────────────────────────────────────────────────────
-# 1. 并行二分搜索函数（一次前向即算 7 个关节）
-# ─────────────────────────────────────────────────────────────
-# ─────────────────────────────────────────────────────────────
-# 1. 并行二分搜索（停在第一次碰撞前）
-# ─────────────────────────────────────────────────────────────
+
 def compute_safe_bounds_step(q, qd, gamma_fn, a_max_np,
                              delta_t=0.02, step_size=0.01,
                              threshold=2.5):
@@ -91,9 +84,6 @@ def compute_safe_bounds_step(q, qd, gamma_fn, a_max_np,
 
 
 
-# ─────────────────────────────────────────────────────────────
-# 2. 主流程：读取样本 → 计算 → 保存
-# ─────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     df = pd.read_csv("generated_q_qd_samples.csv")
     q_all  = torch.tensor(df.iloc[:, 0:7 ].values, dtype=torch.float32)
@@ -111,9 +101,9 @@ if __name__ == "__main__":
         all_bounds.append(np.ravel(np.column_stack((qmin, qmax))))
 
     avg_time = total_time / len(q_all)
-    print(f"📊 Average time per sample: {avg_time:.4f} s")
+    print(f"Average time per sample: {avg_time:.4f} s")
 
     # 列名：q1_min,q1_max,...q7_max
     columns = [f"q{i+1}_{s}" for i in range(7) for s in ("min", "max")]
     pd.DataFrame(all_bounds, columns=columns).to_csv("estimated_bounds.csv", index=False)
-    print("✅ Results saved to estimated_bounds.csv")
+    print("Results saved to estimated_bounds.csv")

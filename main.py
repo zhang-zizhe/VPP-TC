@@ -5,7 +5,7 @@ import pandas as pd
 import torch
 import numpy as np
 
-
+import acc_functions
 from safety_bounds import (
     gamma_model,
     online_search,
@@ -16,12 +16,12 @@ def get_args():
     parser = argparse.ArgumentParser(
         description="Estimate safe joint position bounds for a set of (q, qd) samples"
     )
-    parser.add_argument(
-        "--csv",
-        type=str,
-        default="samples.csv",
-        help="Input CSV containing 14 columns: q1…q7, qd1…qd7",
-    )
+    # parser.add_argument(
+    #     "--csv",
+    #     type=str,
+    #     default="samples.csv",
+    #     help="Input CSV containing 14 columns: q1…q7, qd1…qd7",
+    # )
     parser.add_argument(
         "--method",
         type=str,
@@ -57,38 +57,17 @@ def compute_bounds(q, qd, method, a_max_np):
 def main():
     args = get_args()
 
-    df = pd.read_csv(args.csv)
-    q_all  = torch.tensor(df.iloc[:, 0:7 ].values, dtype=torch.float32)
-    qd_all = torch.tensor(df.iloc[:, 7:14].values, dtype=torch.float32)
-    a_max_np = np.array([15, 7.5, 10, 12.5, 15, 20, 20], dtype=np.float32)
+    # df = pd.read_csv(args.csv)
+    # q_all  = torch.tensor(df.iloc[:, 0:7 ].values, dtype=torch.float32)
+    # qd_all = torch.tensor(df.iloc[:, 7:14].values, dtype=torch.float32)
+    acc_max = np.array([15, 7.5, 10, 12.5, 15, 20, 20], dtype=np.float32)
 
-    all_bounds = []
-    total_time = 0.0
+    # all_bounds = []
 
-    for idx, (q, qd) in enumerate(zip(q_all, qd_all), 1):
-        t0 = time.time()
-        try:
-            q_min, q_max = compute_bounds(q, qd, args.method, a_max_np)
+    # total_time = 0.0
+    runtime = 0.0
 
-            assert q_min.shape == (7,) and q_max.shape == (7,), \
-                f"Returned shape mismatch at sample {idx}"
-
-            all_bounds.append(np.ravel(np.column_stack((q_min, q_max))))
-            total_time += time.time() - t0
-        except Exception as e:
-            print(f"sample {idx} skipped – {e}")
-
-    if all_bounds:
-        out_csv = f"estimated_bounds_{args.method}.csv"
-        cols = [f"q{i}_{s}" for i in range(7) for s in ("min", "max")]
-        pd.DataFrame(all_bounds, columns=cols).to_csv(out_csv, index=False)
-
-        avg = total_time / len(all_bounds)
-        print(f"{len(all_bounds)} samples processed, avg time {avg:.4f}s")
-        print(f"Results saved to: {out_csv}")
-    else:
-        print("No valid samples to save.")
-
+<<<<<<< HEAD
     for idx, (q, qd) in enumerate(zip(q_all, qd_all), 1):
         t0 = time.time()
         try:
@@ -105,5 +84,61 @@ def main():
             total_time += time.time() - t0
         except Exception as e:
             print(f"Sample {idx} skipped – {e}")
+=======
+    # for idx, (q, qd) in enumerate(zip(q_all, qd_all), 1):
+    #     t0 = time.time()
+    #     try:
+    #         q_min, q_max = compute_bounds(q, qd, args.method, acc_max)
+
+    #         assert q_min.shape == (7,) and q_max.shape == (7,), \
+    #             f"Returned shape mismatch at sample {idx}"
+
+    #         all_bounds.append(np.ravel(np.column_stack((q_min, q_max))))
+    #         total_time += time.time() - t0
+    #     except Exception as e:
+    #         print(f"sample {idx} skipped – {e}")
+
+    # Calcualte joint acceleration bounds by reading the robot state
+    t0= time.time()
+    try:
+        q_min, q_max = compute_bounds(robot.q, robot.qd, args.method, acc_max)
+
+        assert q_min.shape == (7,) and q_max.shape == (7,), \
+            f"Returned shape mismatch."
+
+        runtime = time.time() - t0
+    except Exception as e:
+        print(f" skipped - {e}")
+    qdd_lb, qdd_ub = acc_functions.compute_joint_acceleration_bounds_vec(robot.q, robot.qd,
+        robot.qmin, robot.qmax,
+        robot.qdlim, robot.qddlim,
+        dt=0.02, viability=False)
+
+    # Last compute torque bounds
+def compute_gamma(q, qd):
+    if not torch.is_tensor(q):
+        q = torch.tensor(q, dtype=torch.float32)
+    if not torch.is_tensor(qd):
+        qd = torch.tensor(qd, dtype=torch.float32)
+
+    q_batch  = q.view(1, -1)   # shape [1, 7]
+    qd_batch = qd.view(1, -1)  # shape [1, 7]
+
+    gamma_val = gamma_model(q_batch, qd_batch).item()
+    return gamma_val
+
+
+    # if all_bounds:
+    #     out_csv = f"estimated_bounds_{args.method}.csv"
+    #     cols = [f"q{i}_{s}" for i in range(7) for s in ("min", "max")]
+    #     pd.DataFrame(all_bounds, columns=cols).to_csv(out_csv, index=False)
+
+    #     avg = total_time / len(all_bounds)
+    #     print(f"{len(all_bounds)} samples processed, avg time {avg:.4f}s")
+    #     print(f"Results saved to: {out_csv}")
+    # else:
+    #     print("No valid samples to save.")
+
+>>>>>>> 22ae7bfb26d8aedab41128a1725c9939a38cce04
 if __name__ == "__main__":
     main()

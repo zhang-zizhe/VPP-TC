@@ -89,21 +89,21 @@ def main():
     else:
         print("No valid samples to save.")
 
-    # for idx, (q, qd) in enumerate(zip(q_all, qd_all), 1):
-    #     t0 = time.time()
-    #     try:
-    #         q_min, q_max = compute_bounds(q, qd, args.method, a_max_np)
-    #
-    #         assert q_min.shape == (7,) and q_max.shape == (7,), \
-    #             f"Returned shape mismatch at sample {idx}"
-    #
-    #         print(f"Sample {idx}")
-    #         print(f"  q_min: {q_min}, type = {type(q_min)}, shape = {q_min.shape}")
-    #         print(f"  q_max: {q_max}, type = {type(q_max)}, shape = {q_max.shape}")
-    #
-    #         all_bounds.append(np.ravel(np.column_stack((q_min, q_max))))
-    #         total_time += time.time() - t0
-    #     except Exception as e:
-    #         print(f"Sample {idx} skipped – {e}")
+    for idx, (q, qd) in enumerate(zip(q_all, qd_all), 1):
+        t0 = time.time()
+        try:
+            q_min, q_max = compute_bounds(q, qd, args.method, a_max_np)
+
+            assert q_min.shape == (7,) and q_max.shape == (7,), \
+                f"Returned shape mismatch at sample {idx}"
+
+            print(f"Sample {idx}")
+            print(f"  q_min: {q_min}, type = {type(q_min)}, shape = {q_min.shape}")
+            print(f"  q_max: {q_max}, type = {type(q_max)}, shape = {q_max.shape}")
+
+            all_bounds.append(np.ravel(np.column_stack((q_min, q_max))))
+            total_time += time.time() - t0
+        except Exception as e:
+            print(f"Sample {idx} skipped – {e}")
 if __name__ == "__main__":
     main()

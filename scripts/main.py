@@ -4,6 +4,8 @@ import time
 import pandas as pd
 import torch
 import numpy as np
+import math
+import os
 
 import acc_functions
 from safety_bounds import (
@@ -31,10 +33,15 @@ class Panda:
         self.position_control_gain_d = [1.0,1.0,1.0,1.0,1.0,1.0,1.0]
         self.max_torque = [10000,10000,10000,10000,10000,10000,10000]
 
+        self.cam_base_yaw = 30       # 初始 yaw
+        self.cam_pitch = -20         # pitch 可以保持不变
+        self.cam_dist = 1.0          # 距离可以保持不变
+        self.cam_target = [0, 0, 0.5] # 注视点
+
         # connect pybullet
-        p.connect(p.GUI)
+        p.connect(p.GUI, options="--width=2048 --height=1536")
         p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
-        p.resetDebugVisualizerCamera(cameraDistance=1.5, cameraYaw=30, cameraPitch=-20, cameraTargetPosition=[0, 0, 0.5])
+        p.resetDebugVisualizerCamera(cameraDistance=1.0, cameraYaw=30, cameraPitch=-20, cameraTargetPosition=[0, 0, 0.5])
 
         p.resetSimulation()
         p.setTimeStep(self.stepsize)
@@ -253,14 +260,14 @@ def compute_bounds(q, qd, method, a_max_np):
             q, qd, gamma_model, a_max_np,
             delta_t=0.02,
             tol=1e-5,
-            threshold=2.5,
+            threshold=2.55,
         )
     elif method == "grid":
         return online_gridsearch(
             q, qd, gamma_model, a_max_np,
             delta_t=0.02,
             step_size=0.1,
-            threshold=2.5,
+            threshold=2.53,
         )
     else:
         raise ValueError(f"Unknown method: {method}")
@@ -279,13 +286,19 @@ def compute_gamma(q, qd):
     return gamma_val
 
 if __name__ == "__main__":
-    # main()
+
+    times = []
+    dists = []
+    gammas = []
+
+    # 确保输出目录存在
+    os.makedirs("../output", exist_ok=True)
 
     args = get_args()
     acc_max = np.array([15, 7.5, 10, 12.5, 15, 20, 20], dtype=np.float32)
     qd_lim = np.array([2.175, 2.175, 2.175, 2.175, 2.61, 2.61, 2.61], dtype=np.float32)
 
-    duration = 10
+    duration = 5
     stepsize = 1e-3
 
     q_min_hardware = np.array([-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973])
@@ -294,13 +307,13 @@ if __name__ == "__main__":
     robot = Panda(stepsize)
     robot.setControlMode("torque")
 
-    lambda1 = 10
+    lambda1 = 5
     lambda2 = 100
     lambda3 = 100
 
     Tau_SCA = []
     mindvector = []
-
+    time.sleep(2)
     for i in range(int(duration / stepsize)):
         if i % int(1.0 / stepsize) == 0:
             print(f"Simulation time: {robot.t:.3f} s")
@@ -419,34 +432,59 @@ if __name__ == "__main__":
 
         robot.step()
 
+        angular_speed = -60.0  # deg/s
+        # robot.t 为当前仿真时间（秒）
+        new_yaw = robot.cam_base_yaw + angular_speed * robot.t
+        # 保持在 [0, 360) 以内可选
+        new_yaw = new_yaw % 360
+
+        p.resetDebugVisualizerCamera(
+            cameraDistance=robot.cam_dist,
+            cameraYaw=new_yaw,
+            cameraPitch=robot.cam_pitch,
+            cameraTargetPosition=robot.cam_target
+        )
+        dist = math.inf
         collision = False
         for link_1 in [0, 1, 2, 3, 4, 5, 6]:
             for link_2 in [0, 1, 2, 3, 4, 5, 6]:
                 if abs(link_1 - link_2) > 1 and not (link_1 == 4 and link_2 == 6) and not (link_1 == 6 and link_2 == 4):
                     cp_list = robot.getClosestPoints(link_1, link_2)
-                    min_dist = min(cp[8] for cp in cp_list)
-                    if min_dist < 0:
+                    d = [cp[8] for cp in cp_list]
+                    if min(d) < dist:
+                        dist = min(d)
+                    # print(dist)
+                    # print([cp[8] for cp in cp_list])
+                    # min_dist = min([cp[8] for cp in cp_list])
+                    # print(min_dist)
+                    # dist = min_dist
+                    if dist < 0:
                     # if cp_list[0][8] < 0:
+                        # print(f"min_dist={min_dist} < 0")
                         collision = True
-                        print(link_1, link_2)
-                    # min_dist = cp_list[0][8]
-                    # if not cp_list:
-                    #     continue
-                    # for cp in cp_list:
-                    #     dist = cp[8]
-                    #     if dist < min_dist:
-                    #         min_dist = dist
-                    #         min_pair = (link_1, link_2)
-                    # if min_dist < 0:
-                    #     collision = True
-                    #     print(min_pair)
+                        # print(link_1, link_2)
+                    
                 else:
                     continue
 
+        times.append(robot.t)
+        dists.append(dist)
+        gammas.append(Gamma)
+
         if collision:
             print(f"t={robot.t:.3f}s: Collision detected between EE link and link!")
-            input("Self collision detected, press ENTER to continue…")
+            input("Self collision detected! Distance = {dist} < 0. Press ENTER to abort!")
+            break
         else:
-            print(f"t={robot.t:.3f}s: Safe! Distance = {min_dist}, Gamma = {Gamma}")
+            print(f"t={robot.t:.3f}s: Safe! Distance = {dist}, Gamma = {Gamma}")
 
         time.sleep(robot.stepsize)
+    
+    df = pd.DataFrame({
+        "time": times,
+        "dist": dists,
+        "gamma": gammas
+    })
+    output_path = f"../output/{args.constraints}.csv"
+    df.to_csv(output_path, index=False)
+    print(f"Results saved to: {output_path}")

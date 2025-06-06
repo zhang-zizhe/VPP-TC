@@ -7,7 +7,7 @@ from Transformer import TransformerGamma
 # ---------- 模型 & γ 评分 ----------
 device = torch.device("cpu")
 model = TransformerGamma().to(device)
-model.load_state_dict(torch.load("../online_search/transformer_gamma.pt", map_location=device))
+model.load_state_dict(torch.load("../models/network/transformer_gamma.pt", map_location=device))
 model.eval()
 
 @torch.no_grad()

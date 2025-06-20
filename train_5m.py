@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
@@ -64,12 +64,15 @@ class ZonotopeNet(nn.Module):
         return c_hat, g_hat
 
 # ------- 超参数 -------
-batch_size   = 64
+batch_size   = 128
 lr           = 1e-3
-epochs       = 10
+epochs       = 40
 K            = 80
-w_cover, w_contain, w_vol = 1.0, 1.0, 0.001
+w_cover, w_contain, w_vol = 1.0, 1.0, 0.0
 num_samples  = 5_000_000
+dt = 0.02
+acc_max = np.array([15, 7.5, 10, 12.5, 15, 20, 20], dtype=np.float32)
+acc_max_t = torch.tensor(acc_max, device=device).unsqueeze(0)
 csv_path     = './data/bounds_9m_gamma.csv'
 
 # ------ 读取并预处理数据 ------
@@ -115,12 +118,17 @@ loader_val    = DataLoader(dataset_val,   batch_size=batch_size,
 # ---------- 模型/优化器/学习率调度 ----------
 model     = ZonotopeNet().to(device)
 optimizer = optim.AdamW(model.parameters(), lr=lr)
-scheduler = StepLR(optimizer, step_size=2, gamma=0.8)
+# scheduler = StepLR(optimizer, step_size=5, gamma=0.8)
+scheduler = CosineAnnealingLR(optimizer, T_max=epochs, eta_min=1e-6)
 mseloss   = nn.MSELoss()
 scaler    = torch.cuda.amp.GradScaler()
 
 # ------ 训练主循环 ------
 for epoch in range(1, epochs + 1):
+    if epoch < 5:
+        w_contain = 10.0
+    else:
+        w_contain = 1.0
     print(f"Epoch {epoch}/{epochs}, LR={scheduler.get_last_lr()[0]:.1e}")
     model.train()
     accum = {'reg':0,'cover':0,'contain':0,'vol':0}
@@ -132,12 +140,16 @@ for epoch in range(1, epochs + 1):
         # 直接使用原始尺度 q, dq
         q   = x[:, :7]
         dq  = x[:, 7:14]
-
+        # 计算 q_mid, q_neg, q_pos
+        q_mid = q + dq * dt                                      # (batch,7)
+        delta = 0.5 * acc_max_t * (dt**2)                         # (1,7)
+        q_neg = q_mid - delta                                     # 最小可达
+        q_pos = q_mid + delta                                     # 最大可达
         optimizer.zero_grad()
         with torch.amp.autocast(device_type='cuda'):
             c_hat, g_hat = model(x)
             # 回归损失
-            loss_reg = mseloss(c_hat, c_gt) + mseloss(g_hat, g_gt)
+            loss_reg = 2*mseloss(c_hat, c_gt) + mseloss(g_hat, g_gt)
             # 覆盖损失
             alpha     = torch.rand(x.size(0), K, 7, device=device)*2 - 1
             q_p       = c_hat.unsqueeze(1) + alpha * g_hat.unsqueeze(1)
@@ -148,12 +160,15 @@ for epoch in range(1, epochs + 1):
             violate_count += (gamma_p < 2.6).sum().item()
             total_samples += gamma_p.numel()
             # 包含性损失
-            diff = torch.max(torch.abs(c_hat - c_gt), dim=1).values
-            loss_contain = torch.relu(diff - g_hat.sum(dim=1)).mean()
+            qmin_hat = c_hat - g_hat
+            qmax_hat = c_hat + g_hat
+            loss_lower = torch.relu(q_neg - qmax_hat).mean()
+            loss_upper = torch.relu(qmin_hat - q_pos).mean()
+            loss_contain = loss_lower + loss_upper
             # 体积正则
             loss_vol   = (g_hat**2).sum(dim=1).mean()
             # 总损失
-            loss = loss_reg + w_cover*loss_cover + w_contain*loss_contain + w_vol*loss_vol
+            loss = 2*loss_reg + w_cover*loss_cover + w_contain*loss_contain + w_vol*loss_vol
 
         scaler.scale(loss).backward()
         scaler.step(optimizer)
@@ -178,6 +193,11 @@ for epoch in range(1, epochs + 1):
         for x, c_gt, g_gt in loader_val:
             x, c_gt, g_gt = x.to(device), c_gt.to(device), g_gt.to(device)
             batch = x.size(0)
+            q_mid_val = x[:, :7] + x[:, 7:14] * dt
+            delta     = 0.5 * acc_max_t * (dt**2)
+            q_neg_val = q_mid_val - delta
+            q_pos_val = q_mid_val + delta
+
 
             c_hat, g_hat = model(x)
             loss_reg = mseloss(c_hat, c_gt) + mseloss(g_hat, g_gt)
@@ -188,8 +208,12 @@ for epoch in range(1, epochs + 1):
             dq_rep = x[:,7:14].unsqueeze(1).expand(-1, K, -1).reshape(-1,7)
             loss_cover  = torch.relu(2.6 - gamma_eval(q_pf, dq_rep)).mean()
             # 包含
-            diff = torch.max(torch.abs(c_hat - c_gt), dim=1).values
-            loss_contain = torch.relu(diff - g_hat.sum(dim=1)).mean()
+            qmin_hat = c_hat - g_hat
+            qmax_hat = c_hat + g_hat
+
+            loss_lower = torch.relu(q_neg_val - qmax_hat).mean()
+            loss_upper = torch.relu(qmin_hat - q_pos_val).mean()
+            loss_contain = loss_lower + loss_upper
             # 体积
             loss_vol   = (g_hat**2).sum(dim=1).mean()
 

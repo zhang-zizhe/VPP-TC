@@ -13,6 +13,7 @@ from safety_bounds import (
     online_search,
     online_gridsearch,
 )
+from bounds_zono import predict_zonotope
 
 import sys
 sys.path.append('./src')
@@ -83,7 +84,7 @@ class Panda:
     def reset(self):
         self.t = 0.0
         self.control_mode = "torque"
-        self.target_pos = [-0.669, -0.346, -0.842, -1.65, -0.367, 2.5, 1.89]
+        self.target_pos = [-1.669, -0.346, -0.842, -1.65, -0.367, 2.3, 1.99]
         for j in range(self.dof):
             # self.target_pos[j] = (self.q_min[j] + self.q_max[j])/2.0
             self.target_torque[j] = 0.
@@ -285,6 +286,20 @@ def compute_gamma(q, qd):
     gamma_val = gamma_model(q_batch, qd_batch).item()
     return gamma_val
 
+def compute_bounds_zono(q, qd, gamma, acc_max):
+    """
+    使用 Zonotope 模型预测安全边界
+    :param q: 关节位置 (7,)
+    :param qd: 关节速度 (7,)
+    :param gamma: 安全系数
+    :return: q_min, q_max
+    """
+    # if not torch.is_tensor(q):
+    #     q = torch.tensor(q, dtype=torch.float32)
+    # if not torch.is_tensor(qd):
+    #     qd = torch.tensor(qd, dtype=torch.float32)
+    return predict_zonotope(q, qd, gamma, acc_max, dt=0.02)
+
 if __name__ == "__main__":
 
     times = []
@@ -314,6 +329,7 @@ if __name__ == "__main__":
     Tau_SCA = []
     mindvector = []
     time.sleep(2)
+    start_time = time.time()
     for i in range(int(duration / stepsize)):
         if i % int(1.0 / stepsize) == 0:
             print(f"Simulation time: {robot.t:.3f} s")
@@ -336,7 +352,8 @@ if __name__ == "__main__":
         Gamma = compute_gamma(q,qd)
 
         try:
-            q_min, q_max = compute_bounds(torch.tensor(q), torch.tensor(qd), args.search, acc_max)
+            # q_min, q_max = compute_bounds(torch.tensor(q), torch.tensor(qd), args.search, acc_max)
+            q_min, q_max = compute_bounds_zono(q, qd, Gamma, acc_max)
             assert q_min.shape == (7,) and q_max.shape == (7,), \
                 f"Returned shape mismatch."
 
@@ -473,13 +490,16 @@ if __name__ == "__main__":
 
         if collision:
             print(f"t={robot.t:.3f}s: Collision detected between EE link and link!")
-            input("Self collision detected! Distance = {dist} < 0. Press ENTER to abort!")
+            input(f"Self collision detected! Distance = {dist} < 0. Press ENTER to abort!")
             break
         else:
             print(f"t={robot.t:.3f}s: Safe! Distance = {dist}, Gamma = {Gamma}")
+            pass
 
         time.sleep(robot.stepsize)
-    
+    end_time = time.time()
+    elapsed = end_time - start_time
+    print(f"Total runtime: {elapsed:.2f} seconds")
     df = pd.DataFrame({
         "time": times,
         "dist": dists,

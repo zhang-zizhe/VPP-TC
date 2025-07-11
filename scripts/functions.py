@@ -1,6 +1,6 @@
 import math
 import numpy as np
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Optional
 import torch
 from safety_bounds import gamma_model
 
@@ -134,22 +134,31 @@ def compute_joint_acceleration_bounds_vec(
     return qdd_lb, qdd_ub
 
 
-def compute_gamma_and_grad(q, qd, threshold):
+
+def compute_gamma_and_grad(
+    q: np.ndarray,
+    qd: np.ndarray,
+    threshold: float
+) -> Tuple[float, Optional[np.ndarray]]:
     """
-    返回当前 gamma、以及 ∂γ/∂q（shape=(7,)），
-    只在 gamma < threshold 时才计算梯度，否则返回 None
+    返回:
+      - gamma_val: float
+      - full_grad: np.ndarray of shape (14,) when gamma < threshold, else None
     """
-    # 把 q, qd 转为 torch tensor
-    q_t  = torch.tensor(q,  dtype=torch.float32, requires_grad=True)
+    # 1) 构造 tensor（都不需要在这里对 q 开启 grad）
+    q_t  = torch.tensor(q,  dtype=torch.float32, requires_grad=False)
     qd_t = torch.tensor(qd, dtype=torch.float32, requires_grad=False)
-    # 前向
-    gamma = gamma_model(q_t.unsqueeze(0), qd_t.unsqueeze(0))
-    gamma_val = gamma.item()
+
+    # 2) 前向，解包 gamma 和 x
+    gamma_t, x = gamma_model(q_t.unsqueeze(0), qd_t.unsqueeze(0))
+    # gamma_t: 标量 tensor； x: shape (1,14), requires_grad=True
+
+    gamma_val = gamma_t.item()
+
+    # 3) 如果需要梯度，就反向并从 x.grad 里拿
     if gamma_val < threshold:
-        # 只对 q 求梯度
-        gamma.backward()
-        # 拷贝出来
-        grad = q_t.grad.cpu().numpy()   # shape (7,)
-        return gamma_val, grad
+        gamma_t.backward()
+        grad14 = x.grad.squeeze(0).cpu().numpy()  # (14,)
+        return gamma_val, grad14
     else:
         return gamma_val, None

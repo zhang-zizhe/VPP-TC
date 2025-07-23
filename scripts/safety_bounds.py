@@ -7,6 +7,7 @@
 from __future__ import annotations
 import numpy as np
 import torch
+from typing import Tuple
 
 # ---------------------------------------------------------------------------
 # 1.  γ(self‑collision) – 旧回归模型 (TransformerGamma)
@@ -20,12 +21,15 @@ _sc_model.load_state_dict(
 )
 _sc_model.eval()
 
-@torch.no_grad()
-def gamma_model(q_batch: torch.Tensor, dq_batch: torch.Tensor) -> torch.Tensor:
+def gamma_model(
+    q_batch: torch.Tensor,
+    dq_batch: torch.Tensor
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """自碰撞 γ：数值越大越安全"""
     x = torch.cat([q_batch, dq_batch], dim=1).to(device_sc)
+    x.requires_grad_(True)
     _, gamma = _sc_model(x)
-    return gamma.squeeze()            # (B,)
+    return gamma.squeeze(), x            # (B,)
 
 # ---------------------------------------------------------------------------
 # 2.  γ(external‑collision) – 新二分类模型 (extransformer)

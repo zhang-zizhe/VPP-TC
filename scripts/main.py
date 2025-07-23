@@ -17,7 +17,7 @@ import pybullet as p
 from Panda import Panda
 from rdf import query_sdf
 
-SEED = 82
+SEED = 28
 
 np.random.seed(SEED)
 
@@ -67,7 +67,7 @@ if __name__ == "__main__":
         baseMass=0,
         baseCollisionShapeIndex=sphere_collision,
         baseVisualShapeIndex=sphere_visual,
-        basePosition=x+ np.array([0.4, 0.1, 0.0]),
+        basePosition=x+ np.array([0.5, 0.1, 0.0]),
         baseOrientation=[0,0,0,1]
     )
 
@@ -124,18 +124,18 @@ if __name__ == "__main__":
             pose,
             np.array(q, dtype=np.float32)
         )
-        dst2, link_id, _ = query_sdf(
+        dst2, link_id, grad2 = query_sdf(
             x_query,
             pose,
             np.array(qe, dtype=np.float32)
         )
-        dst3, link_id, grad2 = query_sdf(
-            x0+ np.array([0.4, 0.1, 0.0]),
+        dst3, link_id, grad3 = query_sdf(
+            x0+ np.array([0.5, 0.1, 0.0]),
             pose,
             np.array(q, dtype=np.float32)
         )
-        dst4, link_id, _ = query_sdf(
-            x0+ np.array([0.4, 0.1, 0.0]),
+        dst4, link_id, grad4 = query_sdf(
+            x0+ np.array([0.5, 0.1, 0.0]),
             pose,
             np.array(qe, dtype=np.float32)
         )
@@ -166,10 +166,15 @@ if __name__ == "__main__":
         min_idx = int(np.argmin(dist_s))
 
         # 如果最小值是 dst 或 dst2（下标 0 或 1），就用 grad，否则用 grad2
-        if min_idx < 2:
+        if min_idx == 0:
             sel_grad = grad
-        else:
+        elif min_idx == 1:
             sel_grad = grad2
+        elif min_idx == 2:
+            sel_grad = grad3
+        else:
+            sel_grad = grad4
+            
         
         if min(dst, dst2, dst3, dst4) < 0.12:
 
@@ -244,8 +249,9 @@ if __name__ == "__main__":
                 # tau_ext_max = np.array([5.0, 5.0, 5.0, 5.0, 1.0, 1.0, 1.0])
                 tau_ext_max = np.array([87, 87, 87, 87, 12, 12, 12])*0.5
                 if np.random.rand() < 0.1:   # 10% 概率打扰
-                    tau_noise = np.random.uniform(-tau_ext_max, tau_ext_max)
-                    print(f"tau_noise={tau_noise}")
+                    # tau_noise = np.random.uniform(-tau_ext_max, tau_ext_max)
+                    # print(f"tau_noise={tau_noise}")
+                    tau_noise = np.zeros(7)
                 else:
                     tau_noise = np.zeros(7)
                 tau_with_disturb = tau_cmd + tau_noise

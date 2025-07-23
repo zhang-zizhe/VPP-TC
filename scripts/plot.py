@@ -90,17 +90,8 @@ plt.rcParams.update({
 # # plt.show()
 
 # 三个 CSV 文件的路径
-<<<<<<< Updated upstream:plot.py
-file_paths = [
-    "../output/none.csv",
-    "../output/C1.csv",
-    "../output/both.csv"
-]
-labels = ["none", "C1 only", "both"]
-=======
-file_path = "../output/1753231989.9122388.csv"
+file_path = "../output/1753239996.5543027.csv"
 # labels = ["tar", "C1 only", "both"]
->>>>>>> Stashed changes:scripts/plot.py
 
 # 读取三个 DataFrame
 df = pd.read_csv(file_path)
@@ -152,11 +143,11 @@ ax_dist.plot(
         label="Pred Dist",
         linewidth=2
     )
-ax_dist.plot(
-        df["time"], df["pred_distv"],
-        label="Pred Dist Viability",
-        linewidth=2
-    )
+# ax_dist.plot(
+#         df["time"], df["pred_distv"],
+#         label="Pred Dist Viability",
+#         linewidth=2
+#     )
 ax_dist.axhline(y=0.12, color="green", linestyle="--", linewidth=2)
 ax_dist.axhline(y=0, color="red", linestyle="--", linewidth=2)
 
@@ -174,5 +165,5 @@ ax_dist.grid(linestyle=":", alpha=0.6)
 plt.tight_layout()
 
 # 保存图像（DPI 可根据需要调整）
-plt.savefig("../output/comparison_plot.png", dpi=1300, bbox_inches="tight")
+plt.savefig("../output/comparison_plotnn.png", dpi=1300, bbox_inches="tight")
 plt.show()

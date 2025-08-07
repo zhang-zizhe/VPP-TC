@@ -70,7 +70,7 @@ class Panda:
     def reset(self):
         self.t = 0.0
         self.control_mode = "torque"
-        self.target_pos = [-1.669, -0.346, -0.842, -1.65, -0.367, 2.3, 1.99]
+        self.target_pos = [0.669, -0.346, -0.842, -1.65, -0.367, 2.3, 1.99]
         # self.target_pos = [
         #     -1.615,  # 原 -1.669 +0.054
         #     -0.298,  # 原 -0.346 +0.048

@@ -1,6 +1,6 @@
 Go to `scripts` and run:
 ```bash
-python main.py
+python main_cls.py --constraints=both --search=bisection 
 ```
 Run
 ```bash

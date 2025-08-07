@@ -31,7 +31,7 @@ if __name__ == "__main__":
     q_min_hardware = np.array([-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973])
     q_max_hardware = np.array([ 2.8973,  1.7628,  2.8973, -0.0698,  2.8973,  3.7525,  2.8973])
 
-    duration, stepsize = 5.0, 2e-3
+    duration, stepsize = 15.0, 2e-3
     robot = Panda(stepsize)
     robot.setControlMode("torque")
 
@@ -71,7 +71,8 @@ if __name__ == "__main__":
         baseOrientation=[0,0,0,1]
     )
 
-    target_pos = np.array([0.0, -0.6, 0.3])
+    # target_pos = np.array([0.0, -0.6, 0.3])
+    target_pos = np.array([0.0, -0.0, 0.3])
     target_visual = p.createVisualShape(
         shapeType=p.GEOM_SPHERE,
         radius=0.02,
@@ -95,7 +96,7 @@ if __name__ == "__main__":
         # --- 计算主任务的末端力 fc ---
         end_pos = robot.solveForwardKinematics()[0]
         # fx = -50 * (end_pos - np.array([0, 0, 0.3]))
-        fx = -50 * (end_pos - np.array([0.0, -0.6, 0.3]))
+        fx = -50 * (end_pos - target_pos)
         e1 = fx / np.linalg.norm(fx)
         e2 = np.array([1, 0, 0]) - np.dot([1, 0, 0], e1) * e1
         e2 /= np.linalg.norm(e2)
@@ -106,10 +107,10 @@ if __name__ == "__main__":
         xdot = robot.getEndVelocity()
         fc = -D @ (xdot - fx)
 
-        target_pos = np.array([0.0, -0.6, 0.3])
+        # target_pos = np.array([0.0, -0.6, 0.3])
         dist_to_target = np.linalg.norm(end_pos - target_pos)
 
-        new_z = math.sin(i/180*math.pi)*0.1
+        new_z = math.sin(i/180*math.pi)*0.1*0
         new_pos = [x[0], x[1], x[2] + new_z]
         p.resetBasePositionAndOrientation(obstacle_id, new_pos, [0,0,0,1])
 
@@ -139,8 +140,8 @@ if __name__ == "__main__":
             pose,
             np.array(qe, dtype=np.float32)
         )
-        dst2 = dst
-        dst4 = dst3
+        # dst2 = dst
+        # dst4 = dst3
         real_dist = functions.compute_min_center_distance(
             robot_id=robot.robot,
             obstacle_id=obstacle_id,
@@ -153,13 +154,14 @@ if __name__ == "__main__":
             sphere_radius=sphere_radius,
             distance_threshold=2.0  # 根据场景最大可能距离设个比 workspace 大一点的值
         )
-        print(f"[SDF distance]: {min(dst,dst3):.5f}m; [SDF end-distance]: {min(dst2,dst4):.5f}m; [real dst] = {min(real_dist,real_dist2):.5f}m; delta = {real_dist-dst:.5f}m; dist to target = {dist_to_target:.5f}m")
+        # print(f"[SDF distance]: {min(dst,dst3):.5f}m; [SDF end-distance]: {min(dst2,dst4):.5f}m; [real dst] = {min(real_dist,real_dist2):.5f}m; delta = {real_dist-dst:.5f}m; dist to target = {dist_to_target:.5f}m")
         
 
         Gamma, grad_gamma = functions.compute_gamma_and_grad(q, qd, threshold=2.5)
 
         qdd_lb, qdd_ub = functions.compute_joint_acceleration_bounds_vec(
             q, qd, q_min_hardware, q_max_hardware, qd_lim, acc_max, dt=0.02, viability=True)
+
         
         dist_s = [dst, dst2, dst3, dst4]
         # 找到最小值的下标（0→dst, 1→dst2, 2→dst3, 3→dst4）
@@ -176,7 +178,7 @@ if __name__ == "__main__":
             sel_grad = grad4
             
         
-        if min(dst, dst2, dst3, dst4) < 0.12:
+        if min(dst, dst2, dst3, dst4) < 0.1:
 
             dt = 0.02
             # 1) 计算中间量
@@ -190,66 +192,73 @@ if __name__ == "__main__":
             tau_cmd = robot.solveInverseDynamics(q, qd, qdd_cmd.tolist())
             robot.setTargetTorques(tau_cmd)
             robot.step()
+
         else:
-            # 如果需要紧急避碰，直接用梯度方向
+            soft = False
+            for idx in range(7):
+                if qdd_lb[idx] > qdd_ub[idx]:
+                    qdd_lb[idx] = qdd_ub[idx] - 1e-4
+
+            # --- 构建 QP：最小化 ∥J⁺ x - fc∥² + α ∥y∥² ---
+            M = np.array(robot.getMassMatrix(q))
+            tau_id = robot.solveInverseDynamics(q, qd, [0]*7)
+            M_inv = np.linalg.inv(M)
+
+            u = cp.Variable(7)  # torque
+            y = cp.Variable(7)  # acceleration
+            J = np.array(robot.getJacobian())
+            JT_pinv = np.linalg.pinv(J.T)
+
+            objective = cp.sum_squares(JT_pinv @ u - fc) + alpha * cp.sum_squares(u)
+
+            constraints = [
+                M_inv @ u >= qdd_lb + M_inv @ tau_id,
+                M_inv @ u <= qdd_ub + M_inv @ tau_id,
+            ]
+
             if grad_gamma is not None:
-                corner = functions.feasible_qdd_region(
-                    grad_gamma, qd, dt=0.02, qdd_lb=qdd_lb, qdd_ub=qdd_ub)
-                # print(feasible_region)
-                # k = 1
-                # # print(f"t={robot.t:.3f}s: grad_gamma={grad_gamma}, Gamma={Gamma}")
-                # ddq_cmd = k * grad_gamma[7:14]
-                ddq_cmd = corner
-                # ddq_cmd[0] = 0.0
-                ddq_cmd = np.clip(ddq_cmd, -acc_max, acc_max)
-                tau_cmd = robot.solveInverseDynamics(q, qd, ddq_cmd.tolist())
-                robot.setTargetTorques(tau_cmd)
-                robot.step()
-            
+                dt      = 0.02
+                grad_q  = grad_gamma[:7]
+                grad_qd = grad_gamma[7:]
+                g_eff   = 0.5 * grad_q * dt**2 + grad_qd * dt
+                c_const = grad_q.dot(qd) * dt
+                ε       = 4e-1
+                constraints.append(g_eff @ M_inv @ u >= ε-c_const+g_eff @ M_inv @ tau_id) 
+                prob = cp.Problem(cp.Minimize(objective), constraints)
+                try:
+                    prob.solve(solver=cp.OSQP)
+                except cp.SolverError:
+                    print("QP infeasible, relax constraint, use soft constraint")
+                    soft = True
+                    qdd_cmd = np.where(g_eff > 0, qdd_ub, qdd_lb)
+                    tau_cmd = robot.solveInverseDynamics(q, qd, qdd_cmd.tolist())
+                    robot.setTargetTorques(tau_cmd)
+                    robot.step()
+                while prob.status != cp.OPTIMAL and ε > 1e-3:
+                    print("QP infeasible, relax constraint, reduce epsilon")
+                    ε = ε - 1e-1
+                    constraints[-1] = (g_eff @ M_inv @ u >= ε-c_const+g_eff @ M_inv @ tau_id)
+                    prob = cp.Problem(cp.Minimize(objective), constraints)
+                    prob.solve(solver=cp.OSQP)
+                if ε < 1e-3:
+                    print("QP still infeasible, relax constraint, use soft constraint")
+                    soft = True
+                    qdd_cmd = np.where(g_eff > 0, qdd_ub, qdd_lb)
+                    tau_cmd = robot.solveInverseDynamics(q, qd, qdd_cmd.tolist())
+                    robot.setTargetTorques(tau_cmd)
+                    robot.step()
+
+
             else:
-
-                for idx in range(7):
-                    if qdd_lb[idx] > qdd_ub[idx]:
-                        qdd_lb[idx] = qdd_ub[idx] - 1e-4
-
-                # --- 构建 QP：最小化 ∥J⁺ x - fc∥² + α ∥y∥² ---
-                M = np.array(robot.getMassMatrix(q))
-                tau_id = robot.solveInverseDynamics(q, qd, [0]*7)
-                b = M @ np.zeros(7) - tau_id
-
-                u = cp.Variable(7)  # torque
-                y = cp.Variable(7)  # acceleration
-                J = np.array(robot.getJacobian())
-                JT_pinv = np.linalg.pinv(J.T)
-
-                objective = cp.sum_squares(JT_pinv @ u - fc) + alpha * cp.sum_squares(y)
-
-                constraints = [
-                    M @ y - u == b,
-                    y >= qdd_lb,
-                    y <= qdd_ub,
-                ]
-
-                if min(dst, dst2, dst3, dst4) < 0.12:
-                    dt = 0.02
-                    # 1) 计算中间量
-                    c = np.dot(grad, qd) * dt                   # grad·qd * dt
-                    c=0
-                    expr = c + (dt**2) * (grad @ y)
-
-                    # 3) 把 “expr >= 0” 这个 CVXPY Constraint 加进去
-                    constraints.append(expr >= 0)
-                    
-                
-
                 prob = cp.Problem(cp.Minimize(objective), constraints)
                 prob.solve(solver=cp.OSQP)
 
+            if not soft:
                 tau_cmd = np.array(u.value) 
                 # tau_ext_max = np.array([5.0, 5.0, 5.0, 5.0, 1.0, 1.0, 1.0])
                 tau_ext_max = np.array([87, 87, 87, 87, 12, 12, 12])*0.5
                 if np.random.rand() < 0.1:   # 10% 概率打扰
-                    # tau_noise = np.random.uniform(-tau_ext_max, tau_ext_max)
+                    tau_noise = np.random.uniform(-tau_ext_max, tau_ext_max)
                     # print(f"tau_noise={tau_noise}")
                     tau_noise = np.zeros(7)
                 else:
@@ -259,6 +268,8 @@ if __name__ == "__main__":
                 # --- 执行控制 & 可视化 ---
                 # robot.setTargetTorques(x.value.tolist())
                 robot.step()
+
+                
 
         # 更新相机视角（可选）
         # new_yaw = (robot.cam_base_yaw - 60.0 * robot.t) % 360
@@ -291,7 +302,7 @@ if __name__ == "__main__":
             print(f"t={robot.t:.3f}s: Collision! dist={dist}")
             break
         else:
-            # print(f"t={robot.t:.3f}s: Safe. dist={dist}, gamma={Gamma}")
+            print(f"t={robot.t:.3f}s: Safe. dist={dist}, gamma={Gamma}")
             pass
 
         time.sleep(robot.stepsize)

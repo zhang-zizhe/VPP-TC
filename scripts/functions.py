@@ -2,7 +2,7 @@ import math
 import numpy as np
 from typing import Tuple, List, Union, Optional
 import torch
-from safety_bounds import gamma_model
+from Transformer import gamma_model
 import pybullet as p           # 新增：用于自碰撞检测
 
 def acc_bounds_from_pos(q, qd, qmin, qmax, dt):

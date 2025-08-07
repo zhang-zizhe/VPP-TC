@@ -90,7 +90,7 @@ plt.rcParams.update({
 # # plt.show()
 
 # 三个 CSV 文件的路径
-file_path = "../output/1753239996.5543027.csv"
+file_path = "../output/1753337640.9479146.csv"
 # labels = ["tar", "C1 only", "both"]
 
 # 读取三个 DataFrame
@@ -143,12 +143,13 @@ ax_dist.plot(
         label="Pred Dist",
         linewidth=2
     )
-# ax_dist.plot(
-#         df["time"], df["pred_distv"],
-#         label="Pred Dist Viability",
-#         linewidth=2
-#     )
-ax_dist.axhline(y=0.12, color="green", linestyle="--", linewidth=2)
+ax_dist.plot(
+        df["time"], df["pred_distv"],
+        label="Pred Dist Viability",
+        linewidth=2,
+        linestyle="--"
+    )
+ax_dist.axhline(y=0.10, color="green", linestyle="--", linewidth=2)
 ax_dist.axhline(y=0, color="red", linestyle="--", linewidth=2)
 
 ax_dist.set_xlabel(r"time (s)")
@@ -165,5 +166,5 @@ ax_dist.grid(linestyle=":", alpha=0.6)
 plt.tight_layout()
 
 # 保存图像（DPI 可根据需要调整）
-plt.savefig("../output/comparison_plotnn.png", dpi=1300, bbox_inches="tight")
+plt.savefig("../output/comparison_plotntau2.png", dpi=1300, bbox_inches="tight")
 plt.show()

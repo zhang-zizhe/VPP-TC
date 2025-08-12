@@ -15,7 +15,7 @@ import numpy as np
 import cvxpy as cp
 import pybullet as p
 from Panda import Panda
-from rdf import query_sdf
+from rdf import query_sdf, query_sdf_batch
 
 SEED = 28
 
@@ -24,6 +24,7 @@ np.random.seed(SEED)
 
 if __name__ == "__main__":
     times, dists, gammas, real_dists, tar_dists, pred_dists, pred_distsv = [], [], [], [], [], [], []
+    runtime = []
     os.makedirs("../output", exist_ok=True)
 
     acc_max = np.array([15, 7.5, 10, 12.5, 15, 20, 20], dtype=np.float32)
@@ -31,7 +32,7 @@ if __name__ == "__main__":
     q_min_hardware = np.array([-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973])
     q_max_hardware = np.array([ 2.8973,  1.7628,  2.8973, -0.0698,  2.8973,  3.7525,  2.8973])
 
-    duration, stepsize = 15.0, 2e-3
+    duration, stepsize = 6.0, 2e-3
     robot = Panda(stepsize)
     robot.setControlMode("torque")
 
@@ -67,12 +68,13 @@ if __name__ == "__main__":
         baseMass=0,
         baseCollisionShapeIndex=sphere_collision,
         baseVisualShapeIndex=sphere_visual,
-        basePosition=x+ np.array([0.5, 0.1, 0.0]),
+        basePosition=x + np.array([0.5, 0.1, 0.0]),
         baseOrientation=[0,0,0,1]
     )
 
-    # target_pos = np.array([0.0, -0.6, 0.3])
-    target_pos = np.array([0.0, -0.0, 0.3])
+    target_pos = np.array([0.0, -0.6, 0.3])
+    # target_pos = np.array([0.0, -0.0, 0.3])
+
     target_visual = p.createVisualShape(
         shapeType=p.GEOM_SPHERE,
         radius=0.02,
@@ -86,10 +88,11 @@ if __name__ == "__main__":
         baseOrientation=[0,0,0,1]
     )
 
-    time.sleep(2)
+    time.sleep(5)
     start_time = time.time()
 
     for i in range(int(duration / stepsize)):
+        iter_start = time.perf_counter()
         if i % int(1.0 / stepsize) == 0:
             print(f"Simulation time: {robot.t:.3f} s")
 
@@ -110,7 +113,7 @@ if __name__ == "__main__":
         # target_pos = np.array([0.0, -0.6, 0.3])
         dist_to_target = np.linalg.norm(end_pos - target_pos)
 
-        new_z = math.sin(i/180*math.pi)*0.1*0
+        new_z = math.sin(i/180*math.pi)*0.1
         new_pos = [x[0], x[1], x[2] + new_z]
         p.resetBasePositionAndOrientation(obstacle_id, new_pos, [0,0,0,1])
 
@@ -120,40 +123,56 @@ if __name__ == "__main__":
         x0 = np.array(x, dtype=np.float32).reshape(1,3)
         x_query = np.array(new_pos, dtype=np.float32).reshape(1,3)
         pose = np.eye(4)
-        dst, link_id, grad = query_sdf(
+        # dst, grad = query_sdf(
+        #     x_query,
+        #     pose,
+        #     np.array(q, dtype=np.float32)
+        # )
+        # dst2, grad2 = query_sdf(
+        #     x_query,
+        #     pose,
+        #     np.array(qe, dtype=np.float32)
+        # )
+        # dst3, grad3 = query_sdf(
+        #     x0 + np.array([0.5, 0.1, 0.0]),
+        #     pose,
+        #     np.array(q, dtype=np.float32)
+        # )
+        # dst4, grad4 = query_sdf(
+        #     x0 + np.array([0.5, 0.1, 0.0]),
+        #     pose,
+        #     np.array(qe, dtype=np.float32)
+        # )
+        theta_np = np.stack([q, qe], axis=0).astype(np.float32)   # (B=2, 7)
+        points_np = np.stack([
             x_query,
-            pose,
-            np.array(q, dtype=np.float32)
-        )
-        dst2, link_id, grad2 = query_sdf(
-            x_query,
-            pose,
-            np.array(qe, dtype=np.float32)
-        )
-        dst3, link_id, grad3 = query_sdf(
-            x0+ np.array([0.5, 0.1, 0.0]),
-            pose,
-            np.array(q, dtype=np.float32)
-        )
-        dst4, link_id, grad4 = query_sdf(
-            x0+ np.array([0.5, 0.1, 0.0]),
-            pose,
-            np.array(qe, dtype=np.float32)
-        )
-        # dst2 = dst
-        # dst4 = dst3
-        real_dist = functions.compute_min_center_distance(
-            robot_id=robot.robot,
-            obstacle_id=obstacle_id,
-            sphere_radius=sphere_radius,
-            distance_threshold=2.0  # 根据场景最大可能距离设个比 workspace 大一点的值
-        )
-        real_dist2 = functions.compute_min_center_distance(
-            robot_id=robot.robot,
-            obstacle_id=obstacle_id2,
-            sphere_radius=sphere_radius,
-            distance_threshold=2.0  # 根据场景最大可能距离设个比 workspace 大一点的值
-        )
+            x0 + np.array([0.5, 0.1, 0.0], dtype=np.float32)
+        ], axis=0).astype(np.float32)                             # (N=2, 3)
+
+        pose_np = np.broadcast_to(pose, (2, 4, 4)).astype(np.float32)  # (B=2, 4, 4)
+
+        # ------ 一次批量查询：返回 (B,N) 与 (B,N,7) ------
+        dsts, grad_qs = query_sdf_batch(points_np, pose_np, theta_np)  # need_index=False
+
+        # ------ 对应回原来的四个变量 ------
+        dst,  grad  = dsts[0, 0], grad_qs[0, 0]   # q,  x_query
+        dst2, grad2 = dsts[1, 0], grad_qs[1, 0]   # qe, x_query
+        dst3, grad3 = dsts[0, 1], grad_qs[0, 1]   # q,  x0+[0.5,0.1,0.0]
+        dst4, grad4 = dsts[1, 1], grad_qs[1, 1]   # qe, x0+[0.5,0.1,0.0]
+
+        
+        # real_dist = functions.compute_min_center_distance(
+        #     robot_id=robot.robot,
+        #     obstacle_id=obstacle_id,
+        #     sphere_radius=sphere_radius,
+        #     distance_threshold=2.0  # 根据场景最大可能距离设个比 workspace 大一点的值
+        # )
+        # real_dist2 = functions.compute_min_center_distance(
+        #     robot_id=robot.robot,
+        #     obstacle_id=obstacle_id2,
+        #     sphere_radius=sphere_radius,
+        #     distance_threshold=2.0  # 根据场景最大可能距离设个比 workspace 大一点的值
+        # )
         # print(f"[SDF distance]: {min(dst,dst3):.5f}m; [SDF end-distance]: {min(dst2,dst4):.5f}m; [real dst] = {min(real_dist,real_dist2):.5f}m; delta = {real_dist-dst:.5f}m; dist to target = {dist_to_target:.5f}m")
         
 
@@ -164,6 +183,7 @@ if __name__ == "__main__":
 
         
         dist_s = [dst, dst2, dst3, dst4]
+        # dist_s = [dst3, dst4]
         # 找到最小值的下标（0→dst, 1→dst2, 2→dst3, 3→dst4）
         min_idx = int(np.argmin(dist_s))
 
@@ -176,9 +196,16 @@ if __name__ == "__main__":
             sel_grad = grad3
         else:
             sel_grad = grad4
+
+        # if min_idx == 0:
+        #     sel_grad = grad3
+        # elif min_idx == 1:
+        #     sel_grad = grad4
+        
             
         
         if min(dst, dst2, dst3, dst4) < 0.1:
+        # if min(dst3, dst4) < 0.1:
 
             dt = 0.02
             # 1) 计算中间量
@@ -186,8 +213,8 @@ if __name__ == "__main__":
             g_eff = 0.5 * sel_grad * dt**2                       # 0.5 * grad * dt^2
             qdd_cmd = np.where(g_eff > 0, qdd_ub, qdd_lb)
             # qdd_cmd = np.where(g_eff > 0, acc_max, -acc_max)
-            if (c+g_eff @ qdd_cmd)<0:
-                print(c,g_eff @ qdd_cmd,c+g_eff @ qdd_cmd)
+            # if (c+g_eff @ qdd_cmd)<0:
+            #     print(c,g_eff @ qdd_cmd,c+g_eff @ qdd_cmd)
             # qdd_cmd = np.where(g_eff > 0, acc_max, -acc_max)
             tau_cmd = robot.solveInverseDynamics(q, qd, qdd_cmd.tolist())
             robot.setTargetTorques(tau_cmd)
@@ -268,7 +295,8 @@ if __name__ == "__main__":
                 # --- 执行控制 & 可视化 ---
                 # robot.setTargetTorques(x.value.tolist())
                 robot.step()
-
+        iter_end = time.perf_counter()
+        runtime.append(iter_end - iter_start)
                 
 
         # 更新相机视角（可选）
@@ -293,23 +321,26 @@ if __name__ == "__main__":
         times.append(robot.t)
         dists.append(dist)
         gammas.append(Gamma)
-        real_dists.append(min(real_dist, real_dist2))
+        # real_dists.append(min(real_dist, real_dist2))
         tar_dists.append(dist_to_target)
-        pred_dists.append(min(dst, dst3))
-        pred_distsv.append(min(dst2, dst4))
+        # pred_dists.append(min(dst, dst3))
+        # pred_distsv.append(min(dst2, dst4))
 
         if collision:
             print(f"t={robot.t:.3f}s: Collision! dist={dist}")
             break
         else:
-            print(f"t={robot.t:.3f}s: Safe. dist={dist}, gamma={Gamma}")
+            # print(f"t={robot.t:.3f}s: Safe. dist={dist}, gamma={Gamma}")
             pass
 
         time.sleep(robot.stepsize)
 
     # --- 保存结果 ---
     elapsed = time.time() - start_time
-    print(f"Total runtime: {elapsed:.2f}s")
-    df = pd.DataFrame({"time": times, "dist": dists, "gamma": gammas, "real_dist": real_dists, "tar_dist": tar_dists, "pred_dist": pred_dists, "pred_distv": pred_distsv})
+    print(f"Total time: {elapsed:.2f}s")
+    print(f"Total runtime: {sum(runtime[1:]):.2f}s, avg={np.mean(runtime[1:]):.4f}s, max={np.max(runtime[1:]):.4f}s, min={np.min(runtime[1:]):.4f}s, std={np.std(runtime[1:]):.4f}s")
+    # df = pd.DataFrame({"time": times, "dist": dists, "gamma": gammas, "real_dist": real_dists, "tar_dist": tar_dists, "pred_dist": pred_dists, "pred_distv": pred_distsv})
+    df = pd.DataFrame({"runtime": runtime})
     df.to_csv(f"../output/{time.time()}.csv", index=False)
     print("Results saved.")
+    

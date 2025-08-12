@@ -21,7 +21,6 @@ SEED = 28
 
 np.random.seed(SEED)
 
-
 if __name__ == "__main__":
     times, dists, gammas, real_dists, tar_dists, pred_dists, pred_distsv = [], [], [], [], [], [], []
     runtime = []

@@ -35,7 +35,7 @@ if __name__ == "__main__":
     robot = Panda(stepsize)
     robot.setControlMode("torque")
 
-    lambda1, lambda2, lambda3 = 3, 100, 100
+    lambda1, lambda2, lambda3 = 5, 100, 100
     alpha = 1e-2  # 阻尼项权重
     # 球半径
     sphere_radius = 0.05
@@ -122,26 +122,7 @@ if __name__ == "__main__":
         x0 = np.array(x, dtype=np.float32).reshape(1,3)
         x_query = np.array(new_pos, dtype=np.float32).reshape(1,3)
         pose = np.eye(4)
-        # dst, grad = query_sdf(
-        #     x_query,
-        #     pose,
-        #     np.array(q, dtype=np.float32)
-        # )
-        # dst2, grad2 = query_sdf(
-        #     x_query,
-        #     pose,
-        #     np.array(qe, dtype=np.float32)
-        # )
-        # dst3, grad3 = query_sdf(
-        #     x0 + np.array([0.5, 0.1, 0.0]),
-        #     pose,
-        #     np.array(q, dtype=np.float32)
-        # )
-        # dst4, grad4 = query_sdf(
-        #     x0 + np.array([0.5, 0.1, 0.0]),
-        #     pose,
-        #     np.array(qe, dtype=np.float32)
-        # )
+
         theta_np = np.stack([q, qe], axis=0).astype(np.float32)   # (B=2, 7)
         points_np = np.stack([
             x_query,
@@ -174,7 +155,7 @@ if __name__ == "__main__":
         )
         ecollision = False
         # print(f"[SDF distance]: {min(dst,dst3):.5f}m; [SDF end-distance]: {min(dst2,dst4):.5f}m; [real dst] = {min(real_dist,real_dist2):.5f}m; delta = {real_dist-dst:.5f}m; dist to target = {dist_to_target:.5f}m")
-        print(f"[SDF distance]: {min(dst,dst2,dst3,dst4):.5f}m; [real dst] = {min(real_dist,real_dist2):.5f}m; delta = {real_dist-dst:.5f}m; dist to target = {dist_to_target:.5f}m")
+        print(f"[SDF distance]: {min(dst,dst3):.5f}m; [real dst] = {min(real_dist,real_dist2):.5f}m; delta = {real_dist-dst:.5f}m; dist to target = {dist_to_target:.5f}m")
         if min(real_dist, real_dist2) <= 0.05:
             print("Collision!")
             ecollision = True
@@ -185,20 +166,26 @@ if __name__ == "__main__":
             q, qd, q_min_hardware, q_max_hardware, qd_lim, acc_max, dt=0.02, viability=True)
 
         
-        dist_s = [dst, dst2, dst3, dst4]
-        # dist_s = [dst3, dst4]
+        # dist_s = [dst, dst2, dst3, dst4]
+        dist_s = [dst, dst3]
         # 找到最小值的下标（0→dst, 1→dst2, 2→dst3, 3→dst4）
         min_idx = int(np.argmin(dist_s))
 
         # 如果最小值是 dst 或 dst2（下标 0 或 1），就用 grad，否则用 grad2
+        # if min_idx == 0:
+        #     sel_grad = grad
+        # elif min_idx == 1:
+        #     sel_grad = grad2
+        # elif min_idx == 2:
+        #     sel_grad = grad3
+        # else:
+        #     sel_grad = grad4
+
         if min_idx == 0:
             sel_grad = grad
         elif min_idx == 1:
-            sel_grad = grad2
-        elif min_idx == 2:
             sel_grad = grad3
-        else:
-            sel_grad = grad4
+
 
         # if min_idx == 0:
         #     sel_grad = grad3
@@ -206,8 +193,9 @@ if __name__ == "__main__":
         #     sel_grad = grad4
         
             
-        if False:
+        # if False:
         # if min(dst, dst2, dst3, dst4) < 0.106:
+        if min(dst, dst3) < 0.106:
         # if min(dst3, dst4) < 0.1:
 
             dt = 0.02
@@ -221,6 +209,7 @@ if __name__ == "__main__":
             # qdd_cmd = np.where(g_eff > 0, acc_max, -acc_max)
             tau_cmd = robot.solveInverseDynamics(q, qd, qdd_cmd.tolist())
             robot.setTargetTorques(tau_cmd)
+            print("Using fallback controller.")
             robot.step()
 
         else:

@@ -11,8 +11,8 @@ from panda_noball import Panda
 from torch.autograd.functional import hessian
 import matplotlib.pyplot as plt
 from scipy.io import savemat
-duration = 10
-stepsize = 1e-3
+duration = 6
+stepsize = 2e-3
 
 q_min = np.array([-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973])
 q_max = np.array([2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973])
@@ -20,7 +20,7 @@ q_max = np.array([2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973])
 robot = Panda(stepsize)
 robot.setControlMode("torque")
 
-lambda1 = 10
+lambda1 = 5
 lambda2 = 100
 lambda3 = 100
 
@@ -89,8 +89,12 @@ def f(inputs):
 
 Tau_SCA = []
 mindvector = []
-
+times = []
+ee_pos = []
+runtime = []   
+start_time0 = time.time()
 for i in range(int(duration / stepsize)):
+    iter_start = time.perf_counter()
     if i % 1000 == 0:
         print("Simulation time: {:.3f}".format(robot.t))
 
@@ -193,17 +197,55 @@ for i in range(int(duration / stepsize)):
 
     target_torque = [x.value[0], x.value[1], x.value[2], x.value[3], x.value[4], x.value[5], x.value[6]]
     robot.setTargetTorques(target_torque)
-
+    times.append(robot.t)
+    ee_pos.append(np.asarray(end_pos).copy())
     robot.step()
     mindvector.append(robot.getClosestPoints(1, 6)[0][8])
 
-    if i % 100 == 0:
-        print(robot.solveForwardKinematics())
-
+    # if i % 100 == 0:
+        # print(robot.solveForwardKinematics())
+    iter_end = time.perf_counter()
+    runtime.append(iter_end - iter_start)
     time.sleep(robot.stepsize)
+    # print(time.time() - start_time)
 
-# print(Tau_SCA)
+elapsed = time.time() - start_time0
+print(f"Total time: {elapsed:.2f}s")
+print(f"Total runtime: {sum(runtime[1:]):.2f}s, avg={np.mean(runtime[1:]):.4f}s, max={np.max(runtime[1:]):.4f}s, min={np.min(runtime[1:]):.4f}s, std={np.std(runtime[1:]):.4f}s")
 
+ee_pos  = np.vstack(ee_pos)      # (N, 3)
+times   = np.asarray(times)
+
+# ---- (Optional) End-effector normalized jerk (dimensionless) ----
+# Compute end-effector acceleration & jerk numerically
+ee_vel  = np.diff(ee_pos, axis=0) / stepsize            # (N-1, 3)
+ee_acc  = np.diff(ee_vel, axis=0) / stepsize            # (N-2, 3)
+ee_jerk = np.diff(ee_acc, axis=0) / stepsize            # (N-3, 3)
+print("ee_jerk top 5:", ee_jerk[:5])
+T = duration
+path_len = np.sum(np.linalg.norm(np.diff(ee_pos, axis=0), axis=1))
+print("Path length (m):", np.round(path_len, 4))
+NJ = (1.0 / (path_len**2*T**5)) * np.sum(np.sum(ee_jerk**2, axis=1)) * stepsize
+print("End-effector Normalized Jerk (dimensionless):", np.round(NJ, 6))
+from scipy.signal import savgol_filter
+dt = stepsize
+# choose an odd window; ~0.1–0.2 s is a good start -> e.g., 51 samples at 500 Hz
+win = 51; poly = 5
+
+# Direct jerk from positions (3rd derivative)
+ee_jerk_sg = savgol_filter(ee_pos, window_length=win, polyorder=poly,
+                           deriv=3, delta=dt, axis=0, mode="interp")
+# trim edges (half window) to avoid boundary artifacts
+k = win//2
+ee_jerk_valid = ee_jerk_sg[k:-k]
+
+# recompute path length on the same valid segment
+ee_pos_valid = ee_pos[k:-k]
+L = np.sum(np.linalg.norm(np.diff(ee_pos_valid, axis=0), axis=1)) + 1e-12
+T_valid = dt * (ee_pos_valid.shape[0]-1)
+
+NJ_dimless = (1.0 / (L**2*T_valid**5)) * np.sum(np.sum(ee_jerk_valid**2, axis=1)) * dt
+print("Normalized Jerk (smoothed):", NJ_dimless)
 mdic = {"a": Tau_SCA, "label": "experiment"}
 savemat("Tau_SCA_active.mat", mdic)
 

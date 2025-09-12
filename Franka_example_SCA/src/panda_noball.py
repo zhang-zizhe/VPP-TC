@@ -30,13 +30,13 @@ class Panda:
 
         # self.plane = p.loadURDF("./plane/plane.urdf",
         #                         useFixedBase=True)
-        self.plane = p.loadURDF("/home/zhiquan/Code/simulation7.4/franka-pybullet-master/franka-pybullet-master/models/plane/plane.urdf",
+        self.plane = p.loadURDF("/home/zizhe/torque-constraint-learning/Franka_example_SCA/models/plane/plane.urdf",
                                 useFixedBase=True)
         p.changeDynamics(self.plane,-1,restitution=.95)
         # self.robot = p.loadURDF("panda/panda.urdf",
         #                         useFixedBase=True,
         #                         flags=p.URDF_USE_SELF_COLLISION)
-        self.robot = p.loadURDF("/home/zhiquan/Code/simulation7.4/franka-pybullet-master/franka-pybullet-master/models/panda/panda.urdf",
+        self.robot = p.loadURDF("/home/zizhe/torque-constraint-learning/Franka_example_SCA/models/panda/panda.urdf",
                                 useFixedBase=True,
                                 flags=p.URDF_USE_SELF_COLLISION)
         p.changeDynamics(self.robot, -1, linearDamping=0, angularDamping=0)
@@ -73,8 +73,13 @@ class Panda:
     def reset(self):
         self.t = 0.0
         self.control_mode = "torque"
+        # self.target_pos = [0.669, -0.346, -0.742, -1.66, -0.367, 2.3, 1.99]
+        # self.target_pos = [-1.844, -1.116, -1.134, -1.496, -0.394,  1.080,  0.648]
+        # self.target_pos = [-2.089, -0.733, -0.774, -1.703,  1.652,  0.735,  0.082]
+        # self.target_pos = [ 1.787, -0.689, -2.331, -1.018, -0.347,  0.443, -0.028]
         for j in range(self.dof):
             self.target_pos[j] = (self.q_min[j] + self.q_max[j])/2.0
+
             self.target_torque[j] = 0.
             p.resetJointState(self.robot,j,targetValue=self.target_pos[j])
 

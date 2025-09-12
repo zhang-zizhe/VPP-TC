@@ -46,14 +46,14 @@ for df, label in zip(dfs, labels):
 # 在 gamma = 2.5 处画红虚线并标注
 ax_gamma.axhline(y=0.05, color="red", linestyle="--", linewidth=4)
 ax_gamma.text(
-    x=4 - 0.3 * (4 - ax_gamma.get_xlim()[0]),
+    x=1 - 0.3 * (1 - ax_gamma.get_xlim()[0]),
     y=0.05 + 0.0048,
     s=r"threshold",
     color="red",
     fontsize=35  # 这里单独指定“阈值”注释的字体大小
 )
 ax_gamma.set_ylim(0, 0.3)
-ax_gamma.set_xlim(0, 4)
+ax_gamma.set_xlim(0, 1)
 ax_gamma.set_xlabel(r"Time [s]")
 ax_gamma.set_ylabel(r"$S_v(p, q,\dot q)$")
 

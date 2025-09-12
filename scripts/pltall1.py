@@ -25,12 +25,12 @@ file_paths_eca = [
     "../output/1757555383.5267708.csv",
 ]
 file_path = "../output/1757555383.5267708.csv"
-labels_sca = ["w/o SCA", "w/ SCA"]
-color_map_sca = {"w/o SCA": "tab:orange", "w/ SCA": "tab:green"}
-labels_eca = ["w/o ECA", "w/ ECA"]
-color_map_eca = {"w/o ECA": "tab:orange", "w/ ECA": "tab:green"}
+labels_sca = ["w/o SCA", "w/ ALL"]
+color_map_sca = {"w/o SCA": "tab:orange", "w/ ALL": "tab:green"}
+labels_eca = ["w/o ECA", "w/ ALL"]
+color_map_eca = {"w/o ECA": "tab:purple", "w/ ALL": "tab:green"}
 labels = ["SCA Dist.", "ECA Dist."]
-color_map = {"SCA Dist.": "tab:blue", "ECA Dist.": "tab:green"}
+color_map = {"SCA Dist.": "tab:blue", "ECA Dist.": "tab:olive"}
 
 # 读取三个 DataFrame
 dfs_sca = [pd.read_csv(path) for path in file_paths_sca]
@@ -47,25 +47,25 @@ fig, (ax_sca, ax_eca, ax_dist) = plt.subplots(
 # ----- 第一张子图：time vs gamma -----
 for df, label in zip(dfs_sca, labels_sca):
     ax_sca.plot(
-        df["time"], df["gamma"],
+        df["time"], df["dist"],
         label=label,
         linewidth=4,
         color=color_map_sca[label],
     )
 
 # 在 gamma = 2.5 处画红虚线并标注
-ax_sca.axhline(y=2.5, color="red", linestyle="--", linewidth=4)
+ax_sca.axhline(y=0, color="red", linestyle="--", linewidth=4)
 ax_sca.text(
     x=ax_sca.get_xlim()[1] - 0.3 * (ax_sca.get_xlim()[1] - ax_sca.get_xlim()[0]),
-    y=2.5 + 0.6,
-    s=r"threshold",
+    y=0.0032,
+    s=r"collision",
     color="red",
     fontsize=35  # 这里单独指定“阈值”注释的字体大小
 )
-ax_sca.set_ylim(-1, 20)
+ax_sca.set_ylim(-0.01, 0.1)
 ax_sca.set_xlim(0, 6)
 ax_sca.set_xlabel(r"Time [s]")
-ax_sca.set_ylabel(r"$\Gamma (q, \dot q)$")
+ax_sca.set_ylabel(r"SCA Dist. [m]")
 
 # 下面演示两种设置标题大小的方法，任选其一：
 # 方法 A：直接在 set_title 里传 fontsize
@@ -80,25 +80,25 @@ ax_sca.grid(linestyle=":", alpha=0.6)
 # ----- 第一张子图：time vs gamma -----
 for df, label in zip(dfs_eca, labels_eca):
     ax_eca.plot(
-        df["time"], df["pred_distv"]-0.05,
+        df["time"], df["real_dist"]-0.05,
         label=label,
         linewidth=4,
         color=color_map_eca[label],
     )
 
 # 在 gamma = 2.5 处画红虚线并标注
-ax_eca.axhline(y=0.05, color="red", linestyle="--", linewidth=4)
+ax_eca.axhline(y=0.0, color="red", linestyle="--", linewidth=4)
 ax_eca.text(
     x=ax_eca.get_xlim()[1] - 0.3 * (ax_eca.get_xlim()[1] - ax_eca.get_xlim()[0]),
-    y=0.05 + 0.0096,
-    s=r"threshold",
+    y=0.012,
+    s=r"collision",
     color="red",
     fontsize=35  # 这里单独指定“阈值”注释的字体大小
 )
-ax_eca.set_ylim(0, 0.3)
+ax_eca.set_ylim(-0.01, 0.4)
 ax_eca.set_xlim(0, 6)
 ax_eca.set_xlabel(r"Time [s]")
-ax_eca.set_ylabel(r"$S_v(p, q,\dot q)$")
+ax_eca.set_ylabel(r"ECA Dist. [m]")
 
 
 ax_eca.legend(loc="upper right")

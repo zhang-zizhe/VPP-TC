@@ -35,7 +35,7 @@ if __name__ == "__main__":
     robot = Panda(stepsize)
     robot.setControlMode("torque")
 
-    lambda1, lambda2, lambda3 = 5, 100, 100
+    lambda1, lambda2, lambda3 = 3, 100, 100
     alpha = 1e-2  # 阻尼项权重
     # 球半径
     sphere_radius = 0.05
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     )
 
     # 3) 把它组装成一个多体对象（质量设为0表示静态障碍物）
-    x = [0.0, 0.3, 0.2]  # 你要放置的位置
+    x = [0.0, -0.4, 0.5]  # 你要放置的位置
     obstacle_id = p.createMultiBody(
         baseMass=0,
         baseCollisionShapeIndex=sphere_collision,
@@ -63,9 +63,15 @@ if __name__ == "__main__":
         basePosition=x,
         baseOrientation=[0,0,0,1]
     )
+    obstacle_id2 = p.createMultiBody(
+        baseMass=0,
+        baseCollisionShapeIndex=sphere_collision,
+        baseVisualShapeIndex=sphere_visual,
+        basePosition=x + np.array([0.4, 0.1, -0.1]),
+        baseOrientation=[0,0,0,1]
+    )
 
-
-    target_pos = np.array([-0.1, 0.0, 0.3])
+    target_pos = np.array([0.0, -0.6, 0.3])
     # target_pos = np.array([0.0, -0.0, 0.3])
 
     target_visual = p.createVisualShape(
@@ -88,7 +94,7 @@ if __name__ == "__main__":
         iter_start = time.perf_counter()
         if i % int(1.0 / stepsize) == 0:
             print(f"Simulation time: {robot.t:.3f} s")
-
+        print(f"Simulation time: {robot.t:.3f} s")
         # --- 计算主任务的末端力 fc ---
         end_pos = robot.solveForwardKinematics()[0]
         # fx = -50 * (end_pos - np.array([0, 0, 0.3]))
@@ -106,10 +112,15 @@ if __name__ == "__main__":
         # target_pos = np.array([0.0, -0.6, 0.3])
         dist_to_target = np.linalg.norm(end_pos - target_pos)
 
+        new_z = math.sin(2* robot.t)*0.1
+        new_pos = [x[0], x[1], x[2] + new_z]
+        p.resetBasePositionAndOrientation(obstacle_id, new_pos, [0,0,0,1])
+
         # --- 读取关节状态 & 自碰撞 gamma & 梯度 ---
         q, qd = robot.getJointStates()
         qe = functions.compute_qe(q, qd)
         x0 = np.array(x, dtype=np.float32).reshape(1,3)
+        x_query = np.array(new_pos, dtype=np.float32).reshape(1,3)
         pose = np.eye(4)
         # dst, grad = query_sdf(
         #     x_query,
@@ -133,7 +144,8 @@ if __name__ == "__main__":
         # )
         theta_np = np.stack([q, qe], axis=0).astype(np.float32)   # (B=2, 7)
         points_np = np.stack([
-            x0
+            x_query,
+            x0 + np.array([0.4, 0.1, -0.1], dtype=np.float32)
         ], axis=0).astype(np.float32)                             # (N=2, 3)
 
         pose_np = np.broadcast_to(pose, (2, 4, 4)).astype(np.float32)  # (B=2, 4, 4)
@@ -144,7 +156,8 @@ if __name__ == "__main__":
         # ------ 对应回原来的四个变量 ------
         dst,  grad  = dsts[0, 0], grad_qs[0, 0]   # q,  x_query
         dst2, grad2 = dsts[1, 0], grad_qs[1, 0]   # qe, x_query
-
+        dst3, grad3 = dsts[0, 1], grad_qs[0, 1]   # q,  x0+[0.5,0.1,0.0]
+        dst4, grad4 = dsts[1, 1], grad_qs[1, 1]   # qe, x0+[0.5,0.1,0.0]
 
         
         real_dist = functions.compute_min_center_distance(
@@ -153,17 +166,18 @@ if __name__ == "__main__":
             sphere_radius=sphere_radius,
             distance_threshold=2.0  # 根据场景最大可能距离设个比 workspace 大一点的值
         )
+        real_dist2 = functions.compute_min_center_distance(
+            robot_id=robot.robot,
+            obstacle_id=obstacle_id2,
+            sphere_radius=sphere_radius,
+            distance_threshold=2.0  # 根据场景最大可能距离设个比 workspace 大一点的值
+        )
         ecollision = False
-        if real_dist <= 0.05:
-            ecollision = True
-        # real_dist2 = functions.compute_min_center_distance(
-        #     robot_id=robot.robot,
-        #     obstacle_id=obstacle_id2,
-        #     sphere_radius=sphere_radius,
-        #     distance_threshold=2.0  # 根据场景最大可能距离设个比 workspace 大一点的值
-        # )
         # print(f"[SDF distance]: {min(dst,dst3):.5f}m; [SDF end-distance]: {min(dst2,dst4):.5f}m; [real dst] = {min(real_dist,real_dist2):.5f}m; delta = {real_dist-dst:.5f}m; dist to target = {dist_to_target:.5f}m")
-        
+        # print(f"[SDF distance]: {min(dst,dst2,dst3,dst4):.5f}m; [real dst] = {min(real_dist,real_dist2):.5f}m; delta = {real_dist-dst:.5f}m; dist to target = {dist_to_target:.5f}m")
+        if min(real_dist, real_dist2) <= 0.05:
+            print("Collision!")
+            ecollision = True
 
         Gamma, grad_gamma = functions.compute_gamma_and_grad(q, qd, threshold=2.5)
 
@@ -171,7 +185,7 @@ if __name__ == "__main__":
             q, qd, q_min_hardware, q_max_hardware, qd_lim, acc_max, dt=0.02, viability=True)
 
         
-        dist_s = [dst, dst2]
+        dist_s = [dst, dst2, dst3, dst4]
         # dist_s = [dst3, dst4]
         # 找到最小值的下标（0→dst, 1→dst2, 2→dst3, 3→dst4）
         min_idx = int(np.argmin(dist_s))
@@ -181,11 +195,19 @@ if __name__ == "__main__":
             sel_grad = grad
         elif min_idx == 1:
             sel_grad = grad2
+        elif min_idx == 2:
+            sel_grad = grad3
+        else:
+            sel_grad = grad4
 
+        # if min_idx == 0:
+        #     sel_grad = grad3
+        # elif min_idx == 1:
+        #     sel_grad = grad4
         
             
-        # if False: #No ECA
-        if min(dst, dst2) < 0.1:
+        if False:
+        # if min(dst, dst2, dst3, dst4) < 0.125 + abs(math.cos(2* (robot.t))*0.2*0.02):
         # if min(dst3, dst4) < 0.1:
 
             dt = 0.02
@@ -215,10 +237,7 @@ if __name__ == "__main__":
             u = cp.Variable(7)  # torque
             y = cp.Variable(7)  # acceleration
             J = np.array(robot.getJacobian())
-            # JT_pinv = np.linalg.pinv(J.T)
-            # print("J shape:", JT_pinv.shape)
-            # print(J @ J.T)
-            JT_pinv = np.linalg.solve(J @ J.T + 1e-4 * np.eye(J.shape[0]), J)
+            JT_pinv = np.linalg.pinv(J.T)
 
             objective = cp.sum_squares(JT_pinv @ u - fc) + alpha * cp.sum_squares(u)
 
@@ -226,8 +245,7 @@ if __name__ == "__main__":
                 M_inv @ u >= qdd_lb + M_inv @ tau_id,
                 M_inv @ u <= qdd_ub + M_inv @ tau_id,
             ]
-            # if False: #No SCA
-            #     pass
+
             if grad_gamma is not None:
                 dt      = 0.02
                 grad_q  = grad_gamma[:7]
@@ -306,10 +324,10 @@ if __name__ == "__main__":
         times.append(robot.t)
         dists.append(dist)
         gammas.append(Gamma)
-        real_dists.append(real_dist)
+        real_dists.append(min(real_dist, real_dist2))
         tar_dists.append(dist_to_target)
-        pred_dists.append(dst)
-        pred_distsv.append(min(dst, dst2))
+        pred_dists.append(min(dst, dst3))
+        pred_distsv.append(min(dst, dst3, dst2, dst4))
 
         if collision or ecollision:
             print(f"t={robot.t:.3f}s: Collision! dist={dist}")

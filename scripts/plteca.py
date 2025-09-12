@@ -17,8 +17,8 @@ plt.rcParams.update({
 
 # 三个 CSV 文件的路径
 file_paths = [
-    "../output/1757562130.8308601.csv",
-    "../output/1757559826.5177507.csv"
+    "../output/1757642818.1116743.csv",
+    "../output/1757642598.070661.csv"
 ]
 labels = ["w/o ECA", "w/ ECA"]
 color_map = {"w/o ECA": "tab:orange", "w/ ECA": "tab:green"}

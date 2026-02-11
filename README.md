@@ -44,29 +44,22 @@ VPP-TC/
 │   └── utils.py                # Utility functions
 │
 ├── third_party/                # Vendored dependencies
-│   └── rdf/                    # Robot Distance Fields (MIT, Idiap)
+│   └── rdf/                    # Robot Distance Fields 
 │
 ├── assets/                     # Static data
 │   ├── urdf/                   # Robot & plane URDF files
 │   └── models/                 # Pre-trained weights
 │
 ├── scripts/                    # Entry-point scripts
-│   ├── simulate.py             # Main simulation
+│   ├── sample.py               # Dataset sampling (self-collision labels)
 │   ├── train.py                # Model training
+│   ├── simulate.py             # Main simulation
 │   └── plot.py                 # Result visualisation
 │
 └── output/                     # Generated at runtime
 ```
 
 ---
-
-## Installation
-
-### Prerequisites
-
-- Python >= 3.9
-- (Optional) CUDA-enabled GPU for faster SDF inference
-
 ### Steps
 
 ```bash
@@ -89,7 +82,35 @@ This installs the `vpptc` package so that `import vpptc` works from anywhere.
 
 ## Quick Start
 
-### Run the simulation
+The full pipeline consists of four stages: **sample → train → simulate → plot**.
+
+### 1. Sample the self-collision dataset
+
+Generate labelled `(q, qd, qe, collision)` data by randomly sampling joint
+configurations and checking for self-collisions in PyBullet (headless):
+
+```bash
+# Uniform sampling (100k samples)
+python scripts/sample.py --n-samples 100000
+
+# With near-limit bias (increases collision ratio)
+python scripts/sample.py --n-samples 200000 --limit-sampling --limit-joints 3
+```
+
+The output CSV is saved to `output/collision_results.csv` by default.
+
+### 2. Train the Transformer model
+
+```bash
+python scripts/train.py \
+    --data output/collision_results.csv \
+    --epochs 30 \
+    --batch-size 512 \
+    --lr 2e-4 \
+    --output assets/models/transformer_gamma.pt
+```
+
+### 3. Run the simulation
 
 ```bash
 python scripts/simulate.py
@@ -98,7 +119,7 @@ python scripts/simulate.py
 This launches a PyBullet GUI with the Panda robot, a moving obstacle, and the
 VPP-TC controller.  Results are saved to `output/`.
 
-### Customise parameters
+Customise parameters:
 
 ```bash
 python scripts/simulate.py \
@@ -112,21 +133,10 @@ python scripts/simulate.py \
     --output-dir output
 ```
 
-### Visualise results
+### 4. Visualise results
 
 ```bash
 python scripts/plot.py --input output/run_<timestamp>.csv
-```
-
-### Train the Transformer model
-
-```bash
-python scripts/train.py \
-    --data path/to/collision_results.csv \
-    --epochs 30 \
-    --batch-size 512 \
-    --lr 2e-4 \
-    --output assets/models/transformer_gamma.pt
 ```
 
 ---

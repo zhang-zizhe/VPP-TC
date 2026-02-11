@@ -1,4 +1,4 @@
-# VPP-TC: Viability-Preserving Planning with Torque Constraints
+# VPP-TC: Viability-Preserving Passive Torque Control
 
 Official implementation of **"VPP-TC"**, accepted at **ICRA 2026**.
 

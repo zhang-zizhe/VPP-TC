@@ -146,17 +146,21 @@ python scripts/plot.py --input output/run_<timestamp>.csv
 If you find this work useful, please cite:
 
 ```bibtex
-@inproceedings{vpptc2026,
-  title     = {VPP-TC: Viability-Preserving Planning with Torque Constraints},
-  author    = {<Authors>},
-  booktitle = {IEEE International Conference on Robotics and Automation (ICRA)},
-  year      = {2026},
+@misc{zhang2025viabilitypreservingpassivetorquecontrol,
+      title={Viability-Preserving Passive Torque Control}, 
+      author={Zizhe Zhang and Yicong Wang and Zhiquan Zhang and Tianyu Li and Nadia Figueroa},
+      year={2025},
+      eprint={2510.03367},
+      archivePrefix={arXiv},
+      primaryClass={eess.SY},
+      url={https://arxiv.org/abs/2510.03367}, 
 }
 ```
 
 ---
 
 ## Acknowledgements
+This work was supported by the National Science Foundation (NSF) Foundational Research in Robotics (FRR) program under NSF CAREER Award Grant No. FRR-2443721.
 
 This project uses the [Robot Distance Fields](https://arxiv.org/abs/2307.00533)
 library by the Idiap Research Institute, licensed under the MIT License.  The

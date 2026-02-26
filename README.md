@@ -64,7 +64,7 @@ VPP-TC/
 
 ```bash
 # Clone the repository
-git clone https://github.com/<your-username>/VPP-TC.git
+git clone https://github.com/zhang-zizhe/VPP-TC.git
 cd VPP-TC
 
 # Create a virtual environment (recommended)

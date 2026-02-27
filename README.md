@@ -60,6 +60,11 @@ VPP-TC/
 ```
 
 ---
+## Installation with Conda (Recommended)
+
+If you do not have Conda installed, please install **Miniconda** first:  
+https://docs.conda.io/en/latest/miniconda.html
+
 ### Steps
 
 ```bash
@@ -67,13 +72,17 @@ VPP-TC/
 git clone https://github.com/zhang-zizhe/VPP-TC.git
 cd VPP-TC
 
-# Create a virtual environment (recommended)
-python -m venv venv
-source venv/bin/activate   # Linux/macOS
-# venv\Scripts\activate    # Windows
+# Create a new conda environment with Python 3.10
+conda create -n vpptc python=3.10 -y
+
+# Activate the environment
+conda activate vpptc
+
+# Upgrade pip
+python -m pip install --upgrade pip setuptools wheel
 
 # Install in editable mode
-pip install -e .
+python -m pip install -e .
 ```
 
 This installs the `vpptc` package so that `import vpptc` works from anywhere.

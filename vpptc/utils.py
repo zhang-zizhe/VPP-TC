@@ -17,7 +17,7 @@ JOINT_ACCELERATION_LIMITS = [
 ]
 
 
-def compute_qe(q, qd) -> List[float]:
+def compute_qe(q, qd, acc_limits=None) -> List[float]:
     """Compute the joint positions when the robot decelerates to a full stop.
 
     For each joint, assuming maximum deceleration ``|a| = a_max``, the
@@ -27,19 +27,24 @@ def compute_qe(q, qd) -> List[float]:
 
     Parameters
     ----------
-    q : array-like, shape (7,)
+    q : array-like, shape (N,)
         Current joint positions.
-    qd : array-like, shape (7,)
+    qd : array-like, shape (N,)
         Current joint velocities.
+    acc_limits : list of (float, float) or None
+        Per-joint acceleration limits ``(lower, upper)``.  When *None*,
+        falls back to the single-arm ``JOINT_ACCELERATION_LIMITS``.
 
     Returns
     -------
     qe : list of float
         Predicted stopping positions for each joint.
     """
+    if acc_limits is None:
+        acc_limits = JOINT_ACCELERATION_LIMITS
     qe = []
     for j, vel in enumerate(qd):
-        a_max = JOINT_ACCELERATION_LIMITS[j][1]
+        a_max = acc_limits[j][1]
         if vel == 0:
             qe.append(q[j])
         else:

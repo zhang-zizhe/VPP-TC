@@ -52,19 +52,19 @@ def get_args():
     parser.add_argument("--seed", type=int, default=28,
                         help="Random seed (default: 28)")
     parser.add_argument("--target-left", type=float, nargs=3,
-                        default=[0, 0.5, 0.3],
+                        default=[0.3, -0.15, 0.3],
                         help="Target for the LEFT arm (pushed right) [x y z]")
     parser.add_argument("--target-right", type=float, nargs=3,
-                        default=[0, -0.5, 0.3],
+                        default=[0.2, 0.15, 0.3],
                         help="Target for the RIGHT arm (pushed left) [x y z]")
-    parser.add_argument("--gamma-threshold", type=float, default=2.5,
+    parser.add_argument("--gamma-threshold", type=float, default=4,
                         help="Gamma threshold for collision avoidance")
     parser.add_argument("--alpha", type=float, default=1e-2,
                         help="Regularisation weight in the QP")
     parser.add_argument("--model-path", type=str,
                         default=os.path.join(
                             _PROJECT_ROOT, "assets", "models",
-                            "transformer_gamma_dual.pt"),
+                            "transformer_gamma_dual_d0.6.pt"),
                         help="Path to the dual-arm TransformerGamma weights")
     parser.add_argument("--output-dir", type=str,
                         default=os.path.join(_PROJECT_ROOT, "output"),

@@ -106,6 +106,8 @@ def get_args():
                         help="Max ellipse deformation ratio (0=circle, 0.5=moderate)")
     parser.add_argument("--lc-eccen-freq", type=float, default=0.1,
                         help="Eccentricity oscillation frequency in Hz (default: 0.5)")
+    parser.add_argument("--lc-center-speed", type=float, default=0.01,
+                        help="Speed at which LC centres approach each other in m/s (0=static)")
     return parser.parse_args()
 
 
@@ -346,7 +348,8 @@ def main():
     dynamic_lc = (args.lc_shrink_rate > 0
                   or args.lc_rotate_speed_left > 0
                   or args.lc_rotate_speed_right > 0
-                  or args.lc_eccentricity > 0)
+                  or args.lc_eccentricity > 0
+                  or args.lc_center_speed > 0)
 
     # ----- PyBullet setup -----
     p.connect(p.GUI, options="--width=1920 --height=1080")
@@ -399,15 +402,15 @@ def main():
     if not dynamic_lc:
         draw_circle(lc_center_L, lc_radius, color=[0, 0.5, 1], plane=plane_L)
         draw_circle(lc_center_R, lc_radius, color=[1, 0.3, 0], plane=plane_R)
-    # Small spheres at centres
+    # Small spheres at centres (keep IDs for dynamic update)
     vis_l = p.createVisualShape(
         p.GEOM_SPHERE, radius=0.015, rgbaColor=[0, 0.5, 1, 0.6])
-    p.createMultiBody(baseMass=0, baseVisualShapeIndex=vis_l,
-                      basePosition=lc_center_L.tolist())
+    center_body_L = p.createMultiBody(baseMass=0, baseVisualShapeIndex=vis_l,
+                                      basePosition=lc_center_L.tolist())
     vis_r = p.createVisualShape(
         p.GEOM_SPHERE, radius=0.015, rgbaColor=[1, 0.3, 0, 0.6])
-    p.createMultiBody(baseMass=0, baseVisualShapeIndex=vis_r,
-                      basePosition=lc_center_R.tolist())
+    center_body_R = p.createMultiBody(baseMass=0, baseVisualShapeIndex=vis_r,
+                                      basePosition=lc_center_R.tolist())
 
     # ----- Load dual-arm Gamma model -----
     device = torch.device("cpu")
@@ -452,8 +455,21 @@ def main():
         right_pos = np.array(ls_right[0])
         right_vel = np.array(ls_right[6])
 
-        # --- Dynamic limit cycle: shrink + rotate + eccentricity ---
+        # --- Dynamic limit cycle: shrink + rotate + eccentricity + approach ---
         if dynamic_lc:
+            # Move centres toward each other along y-axis
+            if args.lc_center_speed > 0:
+                mid_y = (args.lc_center_left[1] + args.lc_center_right[1]) / 2
+                drift = args.lc_center_speed * sim_t
+                half_dist = abs(args.lc_center_left[1] - mid_y)
+                offset = max(half_dist - drift, 0.0)
+                lc_center_L[1] = mid_y + offset
+                lc_center_R[1] = mid_y - offset
+                p.resetBasePositionAndOrientation(
+                    center_body_L, lc_center_L.tolist(), [0, 0, 0, 1])
+                p.resetBasePositionAndOrientation(
+                    center_body_R, lc_center_R.tolist(), [0, 0, 0, 1])
+
             r_now = max(lc_radius - args.lc_shrink_rate * sim_t,
                         args.lc_radius_min) if args.lc_shrink_rate > 0 else lc_radius
             if args.lc_eccentricity > 0:

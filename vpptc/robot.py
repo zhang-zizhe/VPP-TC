@@ -25,7 +25,8 @@ class Panda:
     """
 
     # Default initial joint configuration
-    DEFAULT_Q0 = [0.669, 0.346, 0.5, -1.66, -0.367, 2.3, 1.99]
+    # DEFAULT_Q0 = [0.669, 0.346, 0.5, -1.66, -0.367, 2.3, 1.99]
+    DEFAULT_Q0 = [0.669, 0.546, 0.8, -1.26, -0.367, 1.3, 1.99]
 
     def __init__(
         self,
@@ -52,7 +53,7 @@ class Panda:
             urdf_dir = _DEFAULT_URDF_DIR
 
         # --- PyBullet initialisation ---
-        p.connect(p.GUI, options="--width=2048 --height=1536")
+        p.connect(p.GUI, options="--width=1280 --height=720")
         p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
         p.resetDebugVisualizerCamera(
             cameraDistance=self.cam_dist,

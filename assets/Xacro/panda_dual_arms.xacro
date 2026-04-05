@@ -5,9 +5,9 @@
   <xacro:arg name="arm_id_2" default="panda_right"/>
 
   <!-- Placement for each arm: xyz and rpy relative to world -->
-  <xacro:arg name="arm_1_xyz" default="0 0.5 0"/>
+  <xacro:arg name="arm_1_xyz" default="0 0.3 0"/>
   <xacro:arg name="arm_1_rpy" default="0 0 0"/>
-  <xacro:arg name="arm_2_xyz" default="0 -0.5 0"/>
+  <xacro:arg name="arm_2_xyz" default="0 -0.3 0"/>
   <xacro:arg name="arm_2_rpy" default="0 0 0"/>
 
   <material name="panda_white">

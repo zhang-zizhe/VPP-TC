@@ -88,14 +88,14 @@ def main():
                         help="Path to the dual-arm collision dataset CSV")
     parser.add_argument("--label-col", type=int, default=42,
                         help="Column index of the binary label (default: 42)")
-    parser.add_argument("--epochs", type=int, default=30,
+    parser.add_argument("--epochs", type=int, default=80,
                         help="Number of training epochs (default: 30)")
     parser.add_argument("--batch-size", type=int, default=512,
                         help="Batch size (default: 512)")
     parser.add_argument("--lr", type=float, default=2e-4,
                         help="Learning rate (default: 2e-4)")
     parser.add_argument("--output", type=str,
-                        default="transformer_gamma_dual.pt",
+                        default="transformer_gamma_dual_d0.6.pt",
                         help="Output model file (default: transformer_gamma_dual.pt)")
     args = parser.parse_args()
 

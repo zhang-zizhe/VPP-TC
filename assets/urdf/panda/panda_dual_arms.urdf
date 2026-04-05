@@ -13,7 +13,7 @@
   <!-- ======== World ======== -->
   <link name="world"/>
   <joint name="panda_left_base_joint" type="fixed">
-    <origin rpy="0 0 0" xyz="0 0.5 0"/>
+    <origin rpy="0 0 0" xyz="0 0.3 0"/>
     <parent link="world"/>
     <child link="panda_left_link0"/>
   </joint>
@@ -241,7 +241,7 @@
     <axis xyz="0 0 0"/>
   </joint>
   <joint name="panda_right_base_joint" type="fixed">
-    <origin rpy="0 0 0" xyz="0 -0.5 0"/>
+    <origin rpy="0 0 0" xyz="0 -0.3 0"/>
     <parent link="world"/>
     <child link="panda_right_link0"/>
   </joint>

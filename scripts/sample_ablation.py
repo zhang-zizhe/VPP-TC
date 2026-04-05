@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Sample joint configurations and detect collisions on dual-arm Panda.
+"""Ablation sampling: position-only collision label + random velocity (single-arm).
 
-Generates a CSV dataset of (q, qd, qe, label) tuples where:
-- q:     14 joint positions (7 per arm, randomly sampled)
-- qd:    14 joint velocities (7 per arm, randomly sampled)
-- qe:    14 predicted stopping positions (computed via max deceleration)
-- label: 1 if either q or qe is in collision, 0 otherwise
+Unlike the standard sampler which uses viability (qe via max deceleration),
+this script labels each sample based on the current position only:
+- collision at q → label = 1
+- no collision at q → label = 0
 
-Collisions include both self-collision within each arm **and** inter-arm
-collisions.
+Velocities are independently random and do NOT affect the label.
+The qe column is still included (filled with random values) to keep
+the CSV format identical for downstream training.
 
 Usage
 -----
-    python scripts/sample_dual.py --n-samples 100000
+    python scripts/sample_ablation.py --n-samples 10000000
 """
 
 import argparse
@@ -28,10 +28,6 @@ _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.join(_SCRIPT_DIR, os.pardir)
 sys.path.insert(0, os.path.abspath(_PROJECT_ROOT))
 
-from vpptc.utils import JOINT_ACCELERATION_LIMITS, compute_qe
-
-DUAL_ACCELERATION_LIMITS = JOINT_ACCELERATION_LIMITS + JOINT_ACCELERATION_LIMITS
-
 
 # ======================================================================
 # Argument parsing
@@ -39,17 +35,16 @@ DUAL_ACCELERATION_LIMITS = JOINT_ACCELERATION_LIMITS + JOINT_ACCELERATION_LIMITS
 
 def get_args():
     parser = argparse.ArgumentParser(
-        description="Sample joint configurations and detect collisions (dual-arm)",
+        description="Ablation: position-only collision sampling (single-arm)",
     )
     parser.add_argument(
-        "--n-samples", type=int, default=10000000,
+        "--n-samples", type=int, default=3000000,
         help="Total number of samples to generate (default: 10000000)",
     )
     parser.add_argument(
         "--urdf", type=str,
-        default=os.path.join(
-            _PROJECT_ROOT, "assets", "urdf", "panda", "panda_dual_arms.urdf"),
-        help="Path to the dual-arm URDF file",
+        default=os.path.join(_PROJECT_ROOT, "assets", "urdf", "panda", "panda.urdf"),
+        help="Path to the Panda URDF file",
     )
     parser.add_argument(
         "--output-dir", type=str,
@@ -68,44 +63,19 @@ def get_args():
 # ======================================================================
 
 def sample_configuration(joint_position_limits, joint_velocity_limits):
-    """Sample a random (q, qd) pair for 14 joints (two 7-DOF arms)."""
+    """Sample a random (q, qd) pair for 7 joints."""
     q = [np.random.uniform(lo, hi) for (lo, hi) in joint_position_limits]
     qd = [np.random.uniform(lo, hi) for (lo, hi) in joint_velocity_limits]
     return q, qd
 
 
-def check_collision(robot_id, joint_indices, q):
-    """Set the robot to configuration *q* and return True if any collision.
-
-    This catches both self-collision within each arm and inter-arm collisions.
-    """
+def check_self_collision(robot_id, joint_indices, q):
+    """Set the robot to configuration *q* and return True if self-collision."""
     for jid, angle in zip(joint_indices, q):
         p.resetJointState(robot_id, jid, angle)
     p.stepSimulation()
     contacts = p.getContactPoints(bodyA=robot_id, bodyB=robot_id)
     return len(contacts) > 0
-
-
-def find_collision_filter_pairs(robot_id):
-    """Find (link5, link7) pairs for each arm to exclude from collision.
-
-    Returns a list of (linkA_index, linkB_index) tuples.
-    """
-    link5_indices = []
-    link7_indices = []
-    for i in range(p.getNumJoints(robot_id)):
-        name = p.getJointInfo(robot_id, i)[12].decode("utf-8")
-        if name.endswith("_link5"):
-            link5_indices.append(i)
-        elif name.endswith("_link7"):
-            link7_indices.append(i)
-
-    pairs = []
-    for l5 in link5_indices:
-        for l7 in link7_indices:
-            if abs(l5 - l7) < 5:
-                pairs.append((l5, l7))
-    return pairs
 
 
 # ======================================================================
@@ -126,13 +96,8 @@ def main():
     flags = p.URDF_USE_SELF_COLLISION | p.URDF_USE_SELF_COLLISION_EXCLUDE_PARENT
     robot = p.loadURDF(args.urdf, useFixedBase=True, flags=flags)
 
-    # Exclude (link5, link7) pairs for each arm (consistent with simulate.py)
-    filter_pairs = find_collision_filter_pairs(robot)
-    for l_a, l_b in filter_pairs:
-        p.setCollisionFilterPair(robot, robot, l_a, l_b, enableCollision=0)
-        name_a = p.getJointInfo(robot, l_a)[12].decode("utf-8")
-        name_b = p.getJointInfo(robot, l_b)[12].decode("utf-8")
-        print(f"Excluded collision pair: ({l_a}) {name_a} <-> ({l_b}) {name_b}")
+    # Exclude link pair (4, 6) from self-collision (consistent with simulate.py)
+    p.setCollisionFilterPair(robot, robot, 4, 6, enableCollision=0)
 
     # --- Discover movable joints and their limits ---
     joint_indices = []
@@ -146,62 +111,68 @@ def main():
             joint_velocity_limits.append((-info[11], info[11]))
 
     n_joints = len(joint_indices)
-    if n_joints != 14:
-        raise RuntimeError(
-            f"Expected 14 movable joints for dual-arm, found {n_joints}")
-
-    print(f"Found {n_joints} movable joints (2 arms x 7 DOF)")
+    print(f"Found {n_joints} movable joints")
+    print(f"[ABLATION] Position-only labelling (no viability qe)")
     print(f"Sampling {args.n_samples} configurations ...")
 
-    # --- Sample and check collisions ---
+    # --- Sample with balanced ratio (collision:safe = 4:6) ---
+    max_collision = int(args.n_samples * 0.4)
+    max_safe = args.n_samples - max_collision
     pos_samples = []
     vel_samples = []
-    end_samples = []
     collision_flags = []
     n_collision = 0
+    n_safe = 0
+    n_tried = 0
 
     report_interval = max(1, args.n_samples // 10)
 
-    for idx in range(args.n_samples):
+    while (n_collision + n_safe) < args.n_samples:
         q, qd = sample_configuration(
             joint_position_limits, joint_velocity_limits)
+        n_tried += 1
 
-        qe = compute_qe(q, qd, acc_limits=DUAL_ACCELERATION_LIMITS)
+        # Ablation: label based on position q only, no viability
+        collision = check_self_collision(robot, joint_indices, q)
 
-        collision_q = check_collision(robot, joint_indices, q)
-        collision_qe = check_collision(robot, joint_indices, qe)
+        # Reject if quota for this class is full
+        if collision and n_collision >= max_collision:
+            continue
+        if not collision and n_safe >= max_safe:
+            continue
 
-        collision = collision_q or collision_qe
         if collision:
             n_collision += 1
+        else:
+            n_safe += 1
 
         pos_samples.append(q)
         vel_samples.append(qd)
-        end_samples.append(qe)
         collision_flags.append(collision)
 
-        if (idx + 1) % report_interval == 0:
-            pct = n_collision / (idx + 1) * 100
-            print(f"  [{idx + 1:>{len(str(args.n_samples))}}/{args.n_samples}] "
-                  f"collisions = {n_collision} ({pct:.1f}%)")
+        total = n_collision + n_safe
+        if total % report_interval == 0:
+            pct = n_collision / total * 100
+            print(f"  [{total:>{len(str(args.n_samples))}}/{args.n_samples}] "
+                  f"collisions = {n_collision} ({pct:.1f}%)  "
+                  f"tried = {n_tried}")
 
     # --- Write CSV ---
-    csv_path = os.path.join(args.output_dir, "dual_collision_d0.6m.csv")
+    csv_path = os.path.join(args.output_dir, "ablation_posonly_3M.csv")
 
     header = (
         [f"joint_{i}_pos" for i in range(n_joints)]
         + [f"joint_{i}_vel" for i in range(n_joints)]
-        + [f"joint_{i}_final_pos" for i in range(n_joints)]
         + ["collision"]
     )
 
     with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(header)
-        for q, qd, qe, flag in zip(
-            pos_samples, vel_samples, end_samples, collision_flags
+        for q, qd, flag in zip(
+            pos_samples, vel_samples, collision_flags
         ):
-            writer.writerow(list(q) + list(qd) + list(qe) + [int(flag)])
+            writer.writerow(list(q) + list(qd) + [int(flag)])
 
     total_pct = n_collision / args.n_samples * 100
     print(f"\nDone. {n_collision}/{args.n_samples} collisions ({total_pct:.1f}%)")

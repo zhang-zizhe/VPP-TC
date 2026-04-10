@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+*.csv
+*.pt
+*.png
+output/
+venv/
+*.egg-info/
+
+# Large mesh/model files (download separately)
+*.stl
+*.dae
+*.npy
+assets/urdf/openarm_description/meshes/
+assets/urdf/panda/meshes/
+third_party/rdf/models/
+third_party/rdf/panda_layer/meshes/
+third_party/rdf/data/
+assets/models/rdf/

@@ -1,0 +1,11 @@
+<launch>
+    <!-- <node name="QP" pkg="constr_passive" type="QP.py" output="screen"/> -->
+    <!-- node name="sca" pkg="constr_passive" type="sca.py" output="screen"/ -->
+    <!-- <node name="cvxpy_QP" pkg="constr_passive" type="QP_sca.py" output="screen"/> -->
+    <!-- <node name="cvxpy_QP" pkg="constr_passive" type="cvxgen_sca.py" output="screen"/> -->
+    <!-- <node name="cvxpy_QP" pkg="constr_passive" type="cvxpy_qp_zz.py" output="screen"/> -->
+    <node name="cvxpy_QP_all" pkg="constr_passive" type="cvxgen_all2.py" output="screen"/>
+    <!-- <node name="cvxpy_qp_only" pkg="constr_passive" type="qp_only.py" output="screen"/> -->
+    <!--node name="QP_withoutsca" pkg="constr_passive" type="QP_withoutsca.py" output="screen"/-->
+    <!--node name="QP_withouteca" pkg="constr_passive" type="QP_withouteca.py" output="screen"/-->
+</launch>

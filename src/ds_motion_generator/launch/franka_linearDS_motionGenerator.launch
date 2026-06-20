@@ -1,0 +1,35 @@
+<?xml version="1.0" ?>
+<launch>
+ 
+ <arg name="direction"     default="-y"/>
+ <arg name="viz_DS_path"   default="true"/>
+# Things to Know!
+# input_topic name should contain          -- geometry_msgs::Pose
+# output_topic_name will write to          -- geometry_msgs::Twist
+# output_pose_name will write to          -- geometry_msgs::PoseStamped
+<group ns="ds1">
+    <param name="input_topic_name"                 value="/franka_state_controller/ee_pose"/>
+    <param name="output_topic_name"                value="/cartesian_impedance_controller/desired_twist_unfiltered"/>
+    # Sends directly to low-level controller
+    <param name="output_filtered_topic_name"       value="/cartesian_impedance_controller/desired_twist"/>
+    <param name="output_pose_topic_name"       value="/cartesian_impedance_controller/desired_pose"/>
+    <param name="world_frame_name"             value="panda_link0"/>
+    <rosparam command="load" file="$(find ds_motion_generator)/config/analytic_DS/linear_motion_$(arg direction).yml"/>
+    <node name="ds_node" pkg="ds_motion_generator" type="Linear_motionGenerator_node" output="screen"/>
+</group>
+
+<group if="$(arg viz_DS_path)">
+  <group ns="ds1_path">
+      <param name="input_topic_name"                  value="/franka_state_controller/ee_pose"/>
+      <param name="output_topic_name"                 value=""/>
+      <param name="output_filtered_topic_name"        value=""/>    
+      <param name="output_pose_topic_name"            value=""/>
+      <param name="publish_DS_path"                   value="true"/>
+      <param name="world_frame_name"                  value="panda_link0"/>
+      <rosparam command="load" file="$(find ds_motion_generator)/config/analytic_DS/linear_motion_$(arg direction).yml"/>
+      <node name="ds_node" pkg="ds_motion_generator" type="Linear_motionGenerator_node" output="screen"/>
+  </group>
+</group>
+
+
+</launch>

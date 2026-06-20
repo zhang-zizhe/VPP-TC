@@ -1,0 +1,5 @@
+velocity: 0.05
+
+direction: "-z"
+
+world_frame_name: "base_link" # For UR10 and mitsubishi gazebo and real (MIT)

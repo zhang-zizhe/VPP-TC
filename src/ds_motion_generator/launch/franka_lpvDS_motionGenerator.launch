@@ -1,0 +1,36 @@
+<?xml version="1.0" ?>
+<launch>
+ 
+ # You can fill in here the name of your DS or pass it through the command line or another launch file!
+ <arg name="ds_name"       default="franka-demo"/>
+ <arg name="viz_DS_path"   default="true"/>
+
+# Things to Know!
+# input_topic name should contain          -- geometry_msgs::Pose
+# output_topic_name will write to          -- geometry_msgs::Twist
+# output_orientation_topic_name will write -- geometry_msgs::Quaternion
+<group ns="ds1">
+    <param name="input_topic_name"                 value="/franka_state_controller/ee_pose"/>
+    <param name="output_topic_name"                value="/cartesian_impedance_controller/desired_twist_unfiltered"/>
+    # Sends directly to low-level controller
+    <param name="output_filtered_topic_name"       value="/cartesian_impedance_controller/desired_twist"/>
+    <param name="output_pose_topic_name"       value="/cartesian_impedance_controller/desired_pose"/>
+    <param name="publish_DS_path"                   value="false"/>
+    <rosparam command="load" file="$(find ds_motion_generator)/config/learned_DS/lpvDS/$(arg ds_name).yml"/>
+    <node name="lpvDS_node" pkg="ds_motion_generator"  type="lpvDS_motionGenerator_node" output="screen"/>
+</group>
+
+<group if="$(arg viz_DS_path)">
+  <group ns="ds1_path">
+      <param name="input_topic_name"                  value="/franka_state_controller/ee_pose"/>
+      <param name="output_topic_name"                 value="/cartesian_impedance_controller/desired_twist_unfiltered"/>
+      <param name="output_filtered_topic_name"        value="/cartesian_impedance_controller/desired_twist"/>    
+      <param name="publish_DS_path"                   value="true"/>
+      <rosparam command="load" file="$(find ds_motion_generator)/config/learned_DS/lpvDS/$(arg ds_name).yml"/>
+      <node name="lpvDS_node" pkg="ds_motion_generator"  type="lpvDS_motionGenerator_node" output="screen"/>
+  </group>
+</group>
+
+# This node published the desired orientation at the target (Orientation for table scenarios)
+  <!-- <node pkg="rostopic" type="rostopic" name="angle_setting" args="pub /lwr/joint_controllers/passive_ds_command_orient geometry_msgs/Quaternion '{x: -0.0426, y: 0.998, z:  0.0039, w: -0.0356}' -r 100" /> -->
+</launch>

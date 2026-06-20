@@ -1,0 +1,12 @@
+# catkin build artifacts
+/build/
+/devel/
+/install/
+/logs/
+.catkin_workspace
+*.pyc
+__pycache__/
+*.so
+*.o
+.vscode/
+.idea/

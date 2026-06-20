@@ -1,0 +1,19 @@
+<package format="2">
+  <name>robot_math_cpp</name>
+  <version>0.0.1</version>
+  <description>robot_math_cpp meta-package</description>
+
+  <maintainer email="nadiafig@mit.edu"> Nadia Figueroa </maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <exec_depend>mathlib</exec_depend>
+<!--   <exec_depend>melfa_cobot_trajectory_controller</exec_depend>
+  <exec_depend>melfa_cobot_twist_controller</exec_depend> -->
+<!-- <exec_depend>melfa_cobot_cartesian_controller</exec_depend> -->
+
+  <export>
+    <metapackage/>
+  </export>
+</package>

@@ -1,0 +1,13 @@
+- git:
+    local-name: robot_math_tools
+    uri: https://github.com/nbfigueroa-rlic/robot_math_tools.git
+    
+- git:
+    local-name: fast-gmm
+    uri: https://github.com/epfl-lasa/fast-gmm.git
+    version: devel
+    
+- git:
+    local-name: lpvDS
+    uri: https://github.com/nbfigueroa/lpvDS-lib.git
+    version: nadia

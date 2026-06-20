@@ -1,0 +1,6 @@
+velocity: 0.25
+
+direction: "+y"
+
+# world_frame: "world"   # For kuka gazebo and real (EPFL)
+# world_frame_name: "base_link" # For UR10 and mitsubishi gazebo and real (MIT)

@@ -11,7 +11,15 @@ from typing import Optional, Tuple
 import numpy as np
 import torch
 
-from vpptc.model import TransformerGamma
+# Note: openarm_test uses GammaRegressor (single-head) instead of TransformerGamma.
+# The legacy gamma_model / compute_gamma_and_grad helpers below are kept for
+# reference but are not used by simulate_dual_openarm_dist.py here -- it owns
+# its own gamma+grad code so it can call GammaRegressor directly. We stub
+# TransformerGamma so the module still imports.
+try:
+    from vpptc.model import TransformerGamma  # type: ignore
+except ImportError:
+    TransformerGamma = None  # type: ignore
 
 _PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
 _DEFAULT_MODEL_PATH = os.path.join(
@@ -118,11 +126,16 @@ def compute_gamma_and_grad(
 def acc_bounds_from_pos(
     q: float, qd: float, qmin: float, qmax: float, dt: float
 ) -> Tuple[float, float]:
-    eps = 1e-8
+    """Position-limit-based acceleration bounds (Algorithm 1).
+
+    Returns ``(qdd_lb, qdd_ub)`` such that the joint stays within
+    ``[qmin, qmax]`` after one time step *dt*.
+    """
+    EPS = 1e-9   # avoid div-by-zero when joint is at limit
     qddmax1 = -qd / dt
-    qddmax2 = -(qd ** 2) / (2.0 * max(qmax - q, eps))
+    qddmax2 = -(qd ** 2) / (2.0 * max(qmax - q, EPS))
     qddmax3 = 2.0 * (qmax - q - dt * qd) / (dt ** 2)
-    qddmin2 = (qd ** 2) / (2.0 * max(q - qmin, eps))
+    qddmin2 = (qd ** 2) / (2.0 * max(q - qmin, EPS))
     qddmin3 = 2.0 * (qmin - q - dt * qd) / (dt ** 2)
 
     if qd >= 0:

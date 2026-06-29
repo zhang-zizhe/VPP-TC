@@ -17,7 +17,7 @@ JOINT_ACCELERATION_LIMITS = [
 ]
 
 
-def compute_qe(q, qd, acc_limits=None) -> List[float]:
+def compute_qe(q, qd, acc_limits=None, pos_limits=None) -> List[float]:
     """Compute the joint positions when the robot decelerates to a full stop.
 
     For each joint, assuming maximum deceleration ``|a| = a_max``, the
@@ -34,6 +34,12 @@ def compute_qe(q, qd, acc_limits=None) -> List[float]:
     acc_limits : list of (float, float) or None
         Per-joint acceleration limits ``(lower, upper)``.  When *None*,
         falls back to the single-arm ``JOINT_ACCELERATION_LIMITS``.
+    pos_limits : list of (float, float) or None
+        Per-joint position limits ``(lower, upper)``.  When given, each
+        stopping position is CLAMPED to its joint range: a joint that would
+        brake past its limit physically stops AT the limit, so the un-clamped
+        pose is non-physical and its collision check is meaningless.  When
+        *None* (default) no clamping is applied -- legacy behaviour.
 
     Returns
     -------
@@ -46,11 +52,15 @@ def compute_qe(q, qd, acc_limits=None) -> List[float]:
     for j, vel in enumerate(qd):
         a_max = acc_limits[j][1]
         if vel == 0:
-            qe.append(q[j])
+            qej = q[j]
         else:
             t_stop = abs(vel) / a_max
             delta = 0.5 * vel * t_stop
-            qe.append(q[j] + delta)
+            qej = q[j] + delta
+        if pos_limits is not None:
+            lo, hi = pos_limits[j]
+            qej = min(max(qej, lo), hi)   # stop at the joint limit
+        qe.append(qej)
     return qe
 
 
